@@ -660,14 +660,14 @@ function ParticlesBackground({ colorClass }) {
   const [particles, setParticles] = useState([])
 
   useEffect(() => {
-    // Generate 40 random particles
-    const newParticles = Array.from({ length: 40 }).map((_, i) => ({
+    // Generate 80 random particles (Double the amount)
+    const newParticles = Array.from({ length: 80 }).map((_, i) => ({
       id: i,
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: Math.random() * 6 + 4, // 4px to 10px
-      delay: Math.random() * 5,
-      duration: Math.random() * 10 + 20
+      size: Math.random() * 10 + 6, // 6px to 16px (Bigger)
+      delay: Math.random() * 3, // Less delay
+      duration: Math.random() * 8 + 10 // 10s to 18s (Faster)
     }))
     setParticles(newParticles)
   }, [])
@@ -695,7 +695,7 @@ function ParticlesBackground({ colorClass }) {
       {particles.map(p => (
         <motion.div
           key={p.id}
-          className={`absolute rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] ${particleClass}`}
+          className={`absolute rounded-full shadow-[0_0_20px_rgba(255,255,255,0.6)] ${particleClass}`}
           style={{
             left: `${p.x}%`,
             top: `${p.y}%`,
@@ -704,15 +704,15 @@ function ParticlesBackground({ colorClass }) {
           }}
           animate={{
             y: [-20, -1000],
-            x: [0, (Math.random() - 0.5) * 100],
-            opacity: [0, 0.8, 0],
-            scale: [0.8, 1.5, 0.8]
+            x: [0, (Math.random() - 0.5) * 150],
+            opacity: [0, 1, 0], // Higher opacity
+            scale: [0.5, 2, 0.5] // More dramatic pulsing
           }}
           transition={{
             duration: p.duration,
             repeat: Infinity,
             delay: p.delay,
-            ease: "linear"
+            ease: "easeIn" // Accelerates as they go up
           }}
         />
       ))}
