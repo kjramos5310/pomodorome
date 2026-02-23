@@ -940,19 +940,27 @@ function DeepworkConfigScreen({ mood, suggestedCount, onStart, moodColors, count
 function WarmUpScreen({ mood, currentDeepwork, totalDeepworks, duration, onComplete }) {
   const [timeLeft, setTimeLeft] = useState(duration)
   const [showConfetti, setShowConfetti] = useState(false)
+  const endTimeRef = useRef(Date.now() + duration * 1000)
+  const isCompletingRef = useRef(false)
 
+  // Temporizador basado en tiempo absoluto
   useEffect(() => {
-    if (timeLeft <= 0) {
-      setShowConfetti(true)
-      setTimeout(onComplete, 1500)
-      return
-    }
-
     const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1)
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+      setTimeLeft(remaining)
+      if (remaining <= 0) clearInterval(timer)
     }, 1000)
-
     return () => clearInterval(timer)
+  }, [])
+
+  // Lógica de finalización
+  useEffect(() => {
+    if (timeLeft <= 0 && !isCompletingRef.current) {
+      isCompletingRef.current = true
+      setShowConfetti(true)
+      const t = setTimeout(onComplete, 1500)
+      return () => clearTimeout(t)
+    }
   }, [timeLeft, onComplete])
 
   const progress = ((duration - timeLeft) / duration) * 100
@@ -1160,7 +1168,8 @@ function FocusScreen({ mood, duration, questions, currentQuestionIndex, complete
   const [showConfetti, setShowConfetti] = useState(false)
   const [bgAudio, setBgAudio] = useState("")
   const audioRef = useRef(null)
-  const startTime = useRef(Date.now())
+  const endTimeRef = useRef(Date.now() + duration * 1000)
+  const isCompletingRef = useRef(false)
 
   useEffect(() => {
     if (audioRef.current) {
@@ -1174,22 +1183,27 @@ function FocusScreen({ mood, duration, questions, currentQuestionIndex, complete
     }
   }, [bgAudio])
 
+  // Temporizador basado en tiempo absoluto
   useEffect(() => {
-    if (timeLeft <= 0 || completedQuestions.length === questions.length) {
+    const timer = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+      setTimeLeft(remaining)
+      if (remaining <= 0) clearInterval(timer)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Lógica de finalización
+  useEffect(() => {
+    if ((timeLeft <= 0 || completedQuestions.length === questions.length) && !isCompletingRef.current) {
+      isCompletingRef.current = true
       onComplete({
         duration: duration - timeLeft,
         questionsAnswered: completedQuestions.length,
-        inboxItems: inboxItems // Pasando el inbox para que no se pierda
+        inboxItems: inboxItems
       })
-      return
     }
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1)
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [timeLeft, completedQuestions, questions, duration, onComplete])
+  }, [timeLeft, completedQuestions.length, questions.length, duration, onComplete, inboxItems])
 
   const progress = ((duration - timeLeft) / duration) * 100
   const minutes = Math.floor(timeLeft / 60)
@@ -1420,14 +1434,25 @@ function FocusScreen({ mood, duration, questions, currentQuestionIndex, complete
 // 6.5 BREAK SCREEN
 function BreakScreen({ duration, onComplete }) {
   const [timeLeft, setTimeLeft] = useState(duration)
+  const endTimeRef = useRef(Date.now() + duration * 1000)
+  const isCompletingRef = useRef(false)
 
+  // Temporizador basado en tiempo absoluto
   useEffect(() => {
-    if (timeLeft <= 0) {
-      onComplete()
-      return
-    }
-    const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
+    const timer = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+      setTimeLeft(remaining)
+      if (remaining <= 0) clearInterval(timer)
+    }, 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  // Lógica de finalización
+  useEffect(() => {
+    if (timeLeft <= 0 && !isCompletingRef.current) {
+      isCompletingRef.current = true
+      onComplete()
+    }
   }, [timeLeft, onComplete])
 
   const minutes = Math.floor(timeLeft / 60)
