@@ -1926,7 +1926,7 @@ function Header({ currentProject, projects, showProjectSelector, setShowProjectS
                 exit={{ opacity: 0, y: -10 }}
                 className="absolute top-full mt-2 left-0 right-0 bg-neutral-850 rounded-xl overflow-hidden border border-neutral-700 min-w-[200px]"
               >
-                {projects.map(project => (
+                {projects.filter(p => p.status !== 'done').map(project => (
                   <button
                     key={project.id}
                     onClick={() => {
@@ -2070,6 +2070,7 @@ const PROJECT_TEMPLATES = [
 function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProject, onDeleteProject, onUpdateProject, history }) {
   const [showNewProject, setShowNewProject] = useState(false)
   const [selectedProject, setSelectedProject] = useState(null)
+  const [showArchived, setShowArchived] = useState(false)
   const [step, setStep] = useState('template') // 'template' | 'confirm' | 'duration' | 'custom'
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [customName, setCustomName] = useState('')
@@ -2157,18 +2158,37 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
       {/* Header */}
       <div className="flex items-center justify-between mb-6 px-6">
         <h1 className="text-4xl font-bold">Proyectos</h1>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors text-sm"
-        >
-          <Plus size={18} />
-          Nuevo
-        </button>
+        <div className="flex items-center gap-2">
+          {(() => {
+            const archivedCount = projects.filter(p => p.status === 'done').length
+            return archivedCount > 0 ? (
+              <button
+                onClick={() => setShowArchived(v => !v)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-full font-semibold transition-colors text-sm border ${showArchived
+                  ? 'bg-neutral-700 border-neutral-600 text-white'
+                  : 'bg-transparent border-neutral-600 text-gray-400 hover:border-neutral-500 hover:text-gray-300'
+                  }`}
+              >
+                🗃️ Archivados ({archivedCount})
+              </button>
+            ) : null
+          })()}
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors text-sm"
+          >
+            <Plus size={18} />
+            Nuevo
+          </button>
+        </div>
       </div>
 
       {/* ── KANBAN HORIZONTAL SCROLL ── */}
       <div className="flex gap-4 overflow-x-auto px-6 pb-4" style={{ scrollSnapType: 'x mandatory' }}>
-        {projects.map(project => {
+        {(showArchived
+          ? projects.filter(p => p.status === 'done')
+          : projects.filter(p => p.status !== 'done')
+        ).map(project => {
           const stats = getProjectStats(project.id)
           const isActive = currentProject?.id === project.id
           const status = project.status || 'in_progress'
@@ -2237,13 +2257,15 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
           )
         })}
 
-        {/* Add card */}
-        <button
-          onClick={openNew}
-          className="flex-shrink-0 w-14 h-56 rounded-2xl bg-neutral-800/50 hover:bg-neutral-800 border-2 border-dashed border-neutral-700 flex items-center justify-center transition-colors"
-        >
-          <Plus size={24} className="text-gray-500" />
-        </button>
+        {/* Add card — only in active view */}
+        {!showArchived && (
+          <button
+            onClick={openNew}
+            className="flex-shrink-0 w-14 h-56 rounded-2xl bg-neutral-800/50 hover:bg-neutral-800 border-2 border-dashed border-neutral-700 flex items-center justify-center transition-colors"
+          >
+            <Plus size={24} className="text-gray-500" />
+          </button>
+        )}
       </div>
 
       {/* ── PROJECT DETAIL BOTTOM SHEET ── */}
