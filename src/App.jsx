@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PlayCircle, Plus, Check, Download, Sparkles, Menu, X, Folder, History, BarChart3, ChevronDown, Trash2 } from 'lucide-react'
+import { PlayCircle, Plus, Check, Download, Sparkles, Menu, X, Folder, History, BarChart3, ChevronDown, Trash2, CalendarDays } from 'lucide-react'
 import { useAppData } from './hooks/useAppData'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import './index.css'
@@ -22,6 +22,8 @@ function App() {
 
   const [synthesisData, setSynthesisData] = useState({})
   const [evidenceData, setEvidenceData] = useState({})
+  const [sessionObjective, setSessionObjective] = useState('')
+  const [learningPhase, setLearningPhase] = useState(null) // 'captura' | 'proceso' | 'output'
 
   // Estado - Proyectos y Navegación (persistido en localStorage)
   // GAMIFICATION CONFIG
@@ -229,10 +231,12 @@ function App() {
       deepworksCompleted: currentDeepwork,
       deepworksPlanned: deepworkCount,
       duration: sessionData.duration || 0,
-      xpGained: xpGained, // Guardar XP ganada
+      xpGained: xpGained,
       questions: questions,
       synthesis: synthesisData,
-      evidence: evidenceData
+      evidence: evidenceData,
+      sessionObjective: sessionObjective,
+      learningPhase: learningPhase,
     }
     setHistory(prev => [historyEntry, ...prev])
 
@@ -408,6 +412,14 @@ function App() {
           />
         )}
 
+        {navigationScreen === 'calendar' && (
+          <CalendarScreen
+            key="calendar"
+            history={history}
+            projects={projects}
+          />
+        )}
+
         {/* DeepWork Flow Screens */}
         {!navigationScreen && (
           <>
@@ -417,6 +429,7 @@ function App() {
                 currentRank={currentRank}
                 currentLevel={currentLevel}
                 progressToNext={progressToNext}
+                history={history}
                 onStart={() => {
                   setScreen('mood')
                   addLog('session_start', { timestamp: new Date().toISOString() })
@@ -432,6 +445,18 @@ function App() {
                   setMood(selectedMood)
                   setDeepworkCount(moodConfigs[selectedMood].suggested)
                   addLog('mood_set', { mood: selectedMood })
+                  setScreen('objective')
+                }}
+              />
+            )}
+
+            {screen === 'objective' && (
+              <ObjectiveScreen
+                key="objective"
+                projectName={currentProject?.name}
+                onConfirm={(obj, phase) => {
+                  setSessionObjective(obj)
+                  setLearningPhase(phase)
                   setScreen('config')
                 }}
               />
@@ -583,8 +608,10 @@ function App() {
                   setEvidenceData({})
                   setLogs([])
                   setSessionData({ startTime: null, duration: 0, isActive: false, isPaused: false })
+                  setSessionObjective('')
+                  setLearningPhase(null)
                   setScreen('hero')
-                  setNavigationScreen('metrics') // Ir a métricas es satisfactorio al final del día
+                  setNavigationScreen('metrics')
                   setCurrentDeepwork(1)
                   setMood(null)
                 }}
@@ -721,35 +748,171 @@ function ParticlesBackground({ colorClass }) {
 }
 
 // 1. HERO SCREEN
-function HeroScreen({ onStart, currentRank, currentLevel, progressToNext }) {
-  // console.log('Hero Render:', { currentRank, currentLevel, progressToNext })
+const DAILY_GOAL_HOURS = 12
+
+function HeroScreen({ onStart, currentRank, currentLevel, progressToNext, history }) {
+  const [now, setNow] = useState(new Date())
+
+  // Tick every minute to update countdown
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Today's accumulated hours from history
+  const todayStr = now.toISOString().split('T')[0]
+  const todaySeconds = (history || []).reduce((sum, entry) => {
+    const d = new Date(entry.date)
+    if (d.toISOString().split('T')[0] === todayStr) return sum + (entry.duration || 0)
+    return sum
+  }, 0)
+  const todayHours = todaySeconds / 3600
+  const pct = Math.min(todayHours / DAILY_GOAL_HOURS, 1)
+  const done = pct >= 1
+
+  // Remaining time
+  const remainingSec = Math.max(0, DAILY_GOAL_HOURS * 3600 - todaySeconds)
+  const remH = Math.floor(remainingSec / 3600)
+  const remM = Math.floor((remainingSec % 3600) / 60)
+
+  // SVG ring
+  const R = 58
+  const CIRC = 2 * Math.PI * R
+  const dash = pct * CIRC
+
+  const urgencyColor = done
+    ? '#22c55e'
+    : pct >= 0.7 ? '#eab308'
+      : pct >= 0.4 ? '#f97316'
+        : '#ef4444'
+
+  const urgencyMsg = done
+    ? '🏆 ¡Meta del día cumplida!'
+    : pct === 0
+      ? '⏳ Aún no empezaste — ¡arranca!'
+      : pct < 0.3
+        ? `🔴 Solo ${todayHours.toFixed(1)}h — ¡actívate!`
+        : pct < 0.6
+          ? `🟠 ${todayHours.toFixed(1)}h hechas — sigue empujando`
+          : `🟡 ${todayHours.toFixed(1)}h — ¡tan cerca! No pares`
+
+  // Background tint per state
+  const urgencyBg = done
+    ? 'rgba(34, 197, 94, 0.56)'
+    : pct >= 0.7 ? 'rgba(234, 178, 8, 0.56)'
+      : pct >= 0.4 ? 'rgba(249, 116, 22, 0.54)'
+        : 'rgba(216, 62, 62, 1)'
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 relative"
+      className="min-h-screen w-full flex items-center justify-center relative"
+      style={{ background: `radial-gradient(ellipse 120% 80% at 50% 0%, ${urgencyBg} 0%, #09090b 55%)` }}
     >
+      {/* Animated full-screen color pulse */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        animate={{ opacity: [0.6, 1, 0.6] }}
+        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        style={{ background: `radial-gradient(ellipse 80% 60% at 50% 100%, ${urgencyBg} 0%, transparent 70%)` }}
+      />
+
       <ParticlesBackground colorClass={currentRank.color} />
 
-      <div className="text-center z-10">
-        <motion.button
-          onClick={onStart}
-          className="relative w-64 h-64 rounded-full overflow-hidden cursor-pointer mb-8"
-          animate={{ scale: [1, 1.03, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <img
-            src="https://i.pinimg.com/originals/57/52/1e/57521e44486b536872c9416c465e9079.gif"
-            alt="Iniciar"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 rounded-full ring-2 ring-gold-500/60 hover:ring-gold-400 transition-all" />
-        </motion.button>
+      <div className="text-center z-10 flex flex-col items-center">
 
-        {/* RANK DISPLAY */}
+        {/* ── 12h ring + avatar ── */}
+        <div className="relative mb-6">
+          {/* Outer SVG ring */}
+          <svg width="300" height="300" className="absolute -top-[18px] -left-[18px]" style={{ zIndex: 1, pointerEvents: 'none' }}>
+            {/* Track */}
+            <circle
+              cx="150" cy="150" r={R + 18}
+              fill="none"
+              stroke="rgba(255,255,255,0.06)"
+              strokeWidth="6"
+            />
+            {/* Progress */}
+            <motion.circle
+              cx="150" cy="150" r={R + 18}
+              fill="none"
+              stroke={urgencyColor}
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={`${(pct * 2 * Math.PI * (R + 18))} ${2 * Math.PI * (R + 18)}`}
+              strokeDashoffset="0"
+              transform="rotate(-90 150 150)"
+              initial={{ strokeDasharray: `0 ${2 * Math.PI * (R + 18)}` }}
+              animate={{ strokeDasharray: `${pct * 2 * Math.PI * (R + 18)} ${2 * Math.PI * (R + 18)}` }}
+              transition={{ duration: 1.2, ease: 'easeOut' }}
+              style={{ filter: `drop-shadow(0 0 8px ${urgencyColor})` }}
+            />
+          </svg>
+
+          {/* Avatar button */}
+          <motion.button
+            onClick={onStart}
+            className="relative w-64 h-64 rounded-full overflow-hidden cursor-pointer"
+            animate={{ scale: [1, 1.03, 1] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <img
+              src="https://i.pinimg.com/originals/57/52/1e/57521e44486b536872c9416c465e9079.gif"
+              alt="Iniciar"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 rounded-full ring-2 ring-gold-500/60 hover:ring-gold-400 transition-all" />
+          </motion.button>
+        </div>
+
+        {/* ── Hours / Countdown ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-4 flex flex-col items-center gap-1"
+        >
+          <div className="flex items-baseline gap-1">
+            <span className="text-4xl font-black" style={{ color: urgencyColor }}>
+              {todayHours.toFixed(1)}
+            </span>
+            <span className="text-xl text-gray-500 font-semibold">/ {DAILY_GOAL_HOURS}h</span>
+          </div>
+
+          {/* Thin progress bar */}
+          <div className="w-56 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: urgencyColor }}
+              initial={{ width: 0 }}
+              animate={{ width: `${pct * 100}%` }}
+              transition={{ duration: 1, ease: 'easeOut' }}
+            />
+          </div>
+
+          {!done && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Faltan <span className="text-white font-semibold">{remH}h {remM}m</span>
+            </p>
+          )}
+        </motion.div>
+
+        {/* ── Urgency message ── */}
+        <motion.p
+          key={urgencyMsg}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-sm font-semibold mb-5 px-4 py-1.5 rounded-full bg-neutral-800/80"
+          style={{ color: urgencyColor }}
+        >
+          {urgencyMsg}
+        </motion.p>
+
+        {/* ── Rank display ── */}
         <div className="flex flex-col items-center">
           <div className="relative w-48 h-1 bg-neutral-800 rounded-full overflow-hidden mb-2">
             <motion.div
@@ -766,11 +929,12 @@ function HeroScreen({ onStart, currentRank, currentLevel, progressToNext }) {
             </h3>
           </div>
         </div>
+
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-8 text-gray-400 text-sm"
+          className="mt-6 text-gray-400 text-sm"
         >
           Toca para comenzar tu sesión
         </motion.p>
@@ -1957,7 +2121,8 @@ function Sidebar({ show, onClose, onNavigate, currentScreen }) {
     { id: 'home', icon: PlayCircle, label: 'Iniciar Deepwork', special: true },
     { id: 'projects', icon: Folder, label: 'Proyectos' },
     { id: 'history', icon: History, label: 'Historial' },
-    { id: 'metrics', icon: BarChart3, label: 'Métricas' }
+    { id: 'metrics', icon: BarChart3, label: 'Métricas' },
+    { id: 'calendar', icon: CalendarDays, label: 'Calendario' }
   ]
 
   const handleNavigate = (id) => {
@@ -2033,38 +2198,87 @@ function Sidebar({ show, onClose, onNavigate, currentScreen }) {
 
 // ============= NEW NAVIGATION SCREENS =============
 
-// PROJECT TEMPLATES — edita los nombres y GIFs a tu gusto
+// Activity categories
+const ACTIVITY_TEMPLATES = {
+  principales: [
+    {
+      name: 'Tesis',
+      emoji: '📝',
+      category: 'principal',
+      gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3bnpvbWU1Y2F5cW04dThsOWtlZDcyNW9zOTh2eXBnbjN5Z2Z4b2E3ZCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/LpiA8MVudQO8pitF4c/giphy.gif',
+      focusExample: 'Ej: Redactar capítulo 2, revisar bibliografía, avanzar marco teórico…',
+    },
+    {
+      name: 'Programación',
+      emoji: '💻',
+      category: 'principal',
+      gif: 'https://media.giphy.com/media/U4ZItT6PM3leNZsBtt/giphy.gif',
+      focusExample: 'Ej: Implementar feature X, resolver bug Y, aprender concepto Z…',
+    },
+    {
+      name: 'Redes',
+      emoji: '📡',
+      category: 'principal',
+      gif: 'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExc3VhODQxc2cxbW83OXVqbTBxYTJuaGwwbjhyMnlqc2RsazliaGxoNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/TjFUxbRz3cgfbHmQxs/giphy.gif',
+      focusExample: 'Ej: Estudiar protocolo TCP/IP, practicar subneting, repasar OSI…',
+    },
+    {
+      name: 'Inteligencia Artificial',
+      emoji: '🧠',
+      category: 'principal',
+      gif: 'https://media.giphy.com/media/Tk0g95CHcEuLVveAj3/giphy.gif',
+      focusExample: 'Ej: Implementar modelo X, estudiar paper Y, practicar con dataset Z…',
+    },
+  ],
+  complementarias: [
+    {
+      name: 'Inglés',
+      emoji: '🌎',
+      category: 'complementaria',
+      gif: 'https://media.giphy.com/media/TKDSgScrDV3yPKXMfI/giphy.gif',
+      focusExample: 'Ej: 20 flashcards nuevas, escuchar podcast 30 min, vocabulario de redes…',
+    },
+    {
+      name: 'Entrenamiento de fuerza',
+      emoji: '🏋️',
+      category: 'complementaria',
+      gif: 'https://media.giphy.com/media/yYU6Mivn9bhV0x8BmX/giphy.gif',
+      focusExample: 'Ej: Press banca 4×10, sentadilla progresiva, 10 series de X…',
+    },
+    {
+      name: 'Improvisación',
+      emoji: '🎭',
+      category: 'complementaria',
+      gif: 'https://media.giphy.com/media/UkkOy67JwSPAGOtuXS/giphy.gif',
+      focusExample: 'Ej: 15 min de impro en inglés, narrar sin parar 10 min en español…',
+    },
+    {
+      name: 'Lectura',
+      emoji: '📚',
+      category: 'complementaria',
+      gif: 'https://media.giphy.com/media/YWOs5jNvBu9VVpw37A/giphy.gif',
+      focusExample: 'Ej: 30 páginas de X, leer artículo técnico, capítulo del libro Y…',
+    },
+    {
+      name: 'Shadowing YouTube',
+      emoji: '🎙️',
+      category: 'complementaria',
+      gif: 'https://media.giphy.com/media/FSZoHhWyU5iESIz0lo/giphy.gif',
+      focusExample: 'Ej: 1 video ×3 repeticiones, imitar pronunciación de X hablante…',
+    },
+  ],
+  custom: [
+    { name: 'Proyecto personalizado', emoji: '📁', category: 'custom', gif: '', focusExample: 'Describe de qué va tu proyecto…' },
+  ]
+}
+
+// Flat list kept for legacy compatibility
 const PROJECT_TEMPLATES = [
-  { name: 'Attempt #1 || Cybersecurity', gif: 'https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExc3VhODQxc2cxbW83OXVqbTBxYTJuaGwwbjhyMnlqc2RsazliaGxoNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/TjFUxbRz3cgfbHmQxs/giphy.gif', emoji: '🛡️' },
-  { name: 'Odyssey #1 || Programming Life', gif: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExczF6ajhtZnFxZGJ6amswcDd1ZmlhZDk4MzN0cDhwcXNoOGhubndkeiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/alOB7OP5kiywfGjSJK/giphy.gif', emoji: '💻' },
-  { name: 'Genesis #1 || InnerGlory', gif: 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnAwN3M0eDU0bDA4Z2drdDRpNXYzY2g2dnFjbzd4OGw5OGE1eHZvNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/FYOsEpYK7zHs3eDXmg/giphy.gif', emoji: '🌟' },
-  { name: 'Duel #1 || Solus', gif: 'https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2t2cWJ1ZGRmaThkazZ3NnkwbHpzeWhkdDY0bnQxcTY2MDMxbGo3bCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/ocBtGFDsOjlcp6aItx/giphy.gif', emoji: '⚔️' },
-  { name: 'Pioneer #1 || Axis', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3dDY3OHVkODgxZTRwdTdmcHNyaXJ1eDl6ODVpM2N1ZzNlNXhoazRrbiZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/lBoZ7vCg2jcxPWmQg5/giphy.gif', emoji: '🧭' },
-  { name: 'Ascend #1 || Fluctus', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3dDY3OHVkODgxZTRwdTdmcHNyaXJ1eDl6ODVpM2N1ZzNlNXhoazRrbiZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/59BQveKPcDAYXoEgSW/giphy.gif', emoji: '🚀' },
-  { name: 'Impulse #1 || RISE', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3MW9oejNndHJseHZiZWhmYXN4ZDRzeTB6NGcyYm5sZGd6OXJvbGN2aCZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/qQC8JPGoSvNWZ4GI26/giphy.gif', emoji: '⚡' },
-  { name: 'Lumen #1 || VERTEX', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3Z3p5b3d6bXdzNmFibWJiazdyMjZsNHlkNWF6ejJxM3kzamZsdDZ5diZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/zGfutPr2gc4l74bWO1/giphy.gif', emoji: '💡' },
-  { name: 'Sunrise #1 || WayWarrior', gif: 'https://media2.giphy.com/media/K91OXsr6lSjh5qxQBb/giphy.gif', emoji: '🌅' },
-  { name: 'Astra #1 || Rizoma', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3cHJvN3ZyM2tjZzNwazM2c20zd2ZhZTVmc3pqdnZvaWphYjF6MWdoYyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/Tk0g95CHcEuLVveAj3/giphy.gif', emoji: '🌌' },
-  { name: 'Attempt #1 || Daedalus Evolution', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3bGR3Nm1qenRjOXJ2dHJjbjJoaXAyZnp6Znd6Y2xtaHl5amN3ZGR2aCZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/FSZoHhWyU5iESIz0lo/giphy.gif', emoji: '🧬' },
-  { name: 'Attempt #1 || Last Challenge Helheim', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3cmFrejMyOWtjNjAwYTM5anZ3dzFmMjJpOHFxZDdidjJ6aWN0NWdrbiZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/3ixk0u8vBiNzorfwqw/giphy.gif', emoji: '💀' },
-  { name: 'Attempt #1 || Courses Challenge', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3cHhiMmRuZzYxbjc3c3F3dmltYW81b2pvYjh0c3B2aWw4c2NrMWt4OSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/E69z1zeOPa5iwXDtQp/giphy.gif', emoji: '📚' },
-  { name: 'Endeavor #1 || Programming Life', gif: 'https://media.giphy.com/media/U4ZItT6PM3leNZsBtt/giphy.gif', emoji: '💻' },
-  { name: 'Odyssey #1 || IsPersonal', gif: 'https://media.giphy.com/media/TKDSgScrDV3yPKXMfI/giphy.gif', emoji: '👤' },
-  { name: 'Unleashing #1 || Pursuit to Mastery', gif: 'https://media.giphy.com/media/yYU6Mivn9bhV0x8BmX/giphy.gif', emoji: '🔥' },
-  { name: 'Prime #1 || Awaken of Greatness', gif: 'https://media.giphy.com/media/UkkOy67JwSPAGOtuXS/giphy.gif', emoji: '🦁' },
-  { name: 'Genesis #1 || InnerGlory', gif: 'https://media.giphy.com/media/YWOs5jNvBu9VVpw37A/giphy.gif', emoji: '🌟' },
-  { name: 'Genesis #1 || InnerGloryDAY', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3MWwwcHk1bXR4OTgxbXI1bGxzMXY0bTZxY2h2MG1tcmRqdjcxdGZ0eiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/SHUOEPPGKwxj2/giphy.gif', emoji: '☀️' },
-  { name: 'Impulse #1 || RISE', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3N2V6YzA4OWdiZW5xdG9uZHZxeDJyZ25sb3V4MDJ5NzNvNXduZWI3byZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/qUSLlL6Q1xmkg0uVHU/giphy.gif', emoji: '⚡' },
-  { name: 'COURAGE #1 || DAWN', gif: ' https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3N2V6YzA4OWdiZW5xdG9uZHZxeDJyZ25sb3V4MDJ5NzNvNXduZWI3byZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/nD91xXmAdJ1M0BQWcu/giphy.gif', emoji: '🌅' },
-  { name: 'COURAGE #1 || PRIMUS', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3N2V6YzA4OWdiZW5xdG9uZHZxeDJyZ25sb3V4MDJ5NzNvNXduZWI3byZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/nD91xXmAdJ1M0BQWcu/giphy.gif', emoji: '🛡️' },
-  { name: 'LUMEN #1 || VERTEX', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3bG1qMWR1anVzYzc4amtlcmMycjNzMHI5OTlsbjZ6cG05bWg1M2V4eCZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/qMK2v9K0CiXiRrZWAj/giphy.gif', emoji: '💡' },
-  { name: 'Pioneer #1 || God', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3eXAwcHlxdnVmY2JvOWFoOTdhc21tMHJxamo4NXN1M28yemFyZW5saSZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/YLKTgcET3u8BxWcazA/giphy.gif', emoji: '🔱' },
-  { name: 'AXXIO #1 || Elysium', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3OTZkYWo5cDQyc3h0b3ppNWE2dmJ2bDlhbDMwdWZzMmhpeTRmYjg4cSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/zi4zOxcoXW7tyQJOgC/giphy.gif', emoji: '🌈' },
-  { name: 'AXXIO #1 || ISNOW', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3bnpvbWU1Y2F5cW04dThsOWtlZDcyNW9zOTh2eXBnbjN5Z2Z4b2E3ZCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/8nMUDINw0G4VO/giphy.gif', emoji: '❄️' },
-  { name: 'Ascend #1 || Fluctus', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3bnpvbWU1Y2F5cW04dThsOWtlZDcyNW9zOTh2eXBnbjN5Z2Z4b2E3ZCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/LpiA8MVudQO8pitF4c/giphy.gif', emoji: '🚀' },
-  { name: 'Astra #1 || Rizoma', gif: 'https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3OTRtMTZndGZyaHF1emJodTFmZmZ2c2k5czE5dGZxbGs0cXBkcTd4NyZlcD12MV9naWZzX3JlbGF0ZWQmY3Q9Zw/Anjh1Fw8NMZOpmEWNS/giphy.gif', emoji: '🌌' },
-  { name: 'Proyecto personalizado', gif: '', emoji: '📁' },
+  ...ACTIVITY_TEMPLATES.principales,
+  ...ACTIVITY_TEMPLATES.complementarias,
+  ...ACTIVITY_TEMPLATES.custom,
 ]
+
 
 // PROJECTS SCREEN
 function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProject, onDeleteProject, onUpdateProject, history }) {
@@ -2473,30 +2687,88 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                   </button>
                 </div>
 
-                {/* STEP 1: template list */}
+                {/* STEP 1: template list — activity categories */}
                 {step === 'template' && (
-                  <div className="space-y-2">
-                    {PROJECT_TEMPLATES.map((tpl, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSelectTemplate(tpl)}
-                        className="w-full flex items-center gap-4 p-3 bg-neutral-800 hover:bg-neutral-700 rounded-2xl transition-colors text-left"
-                      >
-                        {tpl.gif ? (
-                          <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
-                            <img src={tpl.gif} alt={tpl.name} className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-14 h-14 rounded-xl bg-neutral-700 flex items-center justify-center text-2xl flex-shrink-0">
-                            {tpl.emoji}
-                          </div>
-                        )}
-                        <div>
-                          <p className="font-semibold text-sm">{tpl.name}</p>
-                          <p className="text-xs text-gray-400">{tpl.gif ? 'Con GIF' : 'Sin GIF'}</p>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="space-y-4">
+
+                    {/* Principales */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500" />
+                        <p className="text-xs font-bold text-red-400 uppercase tracking-widest">Principales</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        {ACTIVITY_TEMPLATES.principales.map((tpl, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleSelectTemplate(tpl)}
+                            className="w-full flex items-center gap-3 p-3 bg-neutral-800/70 hover:bg-neutral-700 rounded-2xl transition-colors text-left border border-neutral-700/50 hover:border-red-500/30"
+                          >
+                            {tpl.gif ? (
+                              <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0">
+                                <img src={tpl.gif} alt={tpl.name} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="w-11 h-11 rounded-xl bg-neutral-700 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm">{tpl.emoji} {tpl.name}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{tpl.focusExample}</p>
+                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 flex-shrink-0">CORE</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Complementarias */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                        <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">Complementarias</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        {ACTIVITY_TEMPLATES.complementarias.map((tpl, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleSelectTemplate(tpl)}
+                            className="w-full flex items-center gap-3 p-3 bg-neutral-800/70 hover:bg-neutral-700 rounded-2xl transition-colors text-left border border-neutral-700/50 hover:border-yellow-500/30"
+                          >
+                            {tpl.gif ? (
+                              <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0">
+                                <img src={tpl.gif} alt={tpl.name} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="w-11 h-11 rounded-xl bg-neutral-700 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm">{tpl.emoji} {tpl.name}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{tpl.focusExample}</p>
+                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 flex-shrink-0">PLUS</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Custom */}
+                    <div>
+                      <div className="space-y-1.5">
+                        {ACTIVITY_TEMPLATES.custom.map((tpl, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleSelectTemplate(tpl)}
+                            className="w-full flex items-center gap-3 p-3 bg-neutral-800/50 hover:bg-neutral-700 rounded-2xl transition-colors text-left border border-dashed border-neutral-700/50"
+                          >
+                            <div className="w-11 h-11 rounded-xl bg-neutral-700 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
+                            <div className="flex-1">
+                              <p className="text-sm text-gray-400">{tpl.name}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                   </div>
                 )}
 
@@ -3214,6 +3486,126 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
   )
 }
 
+// ============= OBJECTIVE SCREEN =============
+const LEARNING_PHASES = [
+  {
+    id: 'captura',
+    label: 'Captura',
+    emoji: '📖',
+    desc: 'Lectura superficial → preguntas → apuntes',
+    color: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+    activeColor: 'border-blue-500 bg-blue-500/20 text-blue-200',
+  },
+  {
+    id: 'output',
+    label: 'Output',
+    emoji: '✍️',
+    desc: 'Síntesis activa → explicar con tus palabras',
+    color: 'border-orange-500/40 bg-orange-500/10 text-orange-300',
+    activeColor: 'border-orange-500 bg-orange-500/20 text-orange-200',
+  },
+  {
+    id: 'proceso',
+    label: 'Proceso (Anki)',
+    emoji: '🧠',
+    desc: 'Flashcards → repaso espaciado',
+    color: 'border-purple-500/40 bg-purple-500/10 text-purple-300',
+    activeColor: 'border-purple-500 bg-purple-500/20 text-purple-200',
+  },
+]
+
+function ObjectiveScreen({ onConfirm, projectName }) {
+  const [objective, setObjective] = useState('')
+  const [phase, setPhase] = useState(null)
+
+  const canContinue = objective.trim().length > 0 && phase !== null
+
+  return (
+    <motion.div
+      initial={{ y: '100%' }}
+      animate={{ y: 0 }}
+      exit={{ y: '-100%' }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 px-6"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="w-full max-w-sm"
+      >
+        {/* Header */}
+        <div className="text-center mb-8">
+          <p className="text-xs text-gold-400 uppercase tracking-widest font-semibold mb-1">
+            {projectName && `→ ${projectName}`}
+          </p>
+          <h2 className="text-3xl font-bold">Intención de sesión</h2>
+          <p className="text-gray-400 text-sm mt-1">Define el objetivo antes de entrar en foco</p>
+        </div>
+
+        {/* Objective input */}
+        <div className="mb-6">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">¿Qué vas a lograr?</p>
+          <textarea
+            autoFocus
+            rows={3}
+            value={objective}
+            onChange={e => setObjective(e.target.value)}
+            placeholder="Ej: Leer cap. 3 de redes y generar 10 preguntas clave…"
+            className="w-full p-4 bg-neutral-800 border border-neutral-700 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-gold-500 text-sm resize-none transition-colors"
+          />
+        </div>
+
+        {/* Learning phase */}
+        <div className="mb-8">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Fase de aprendizaje</p>
+          <div className="space-y-2">
+            {LEARNING_PHASES.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setPhase(p.id)}
+                className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left ${
+                  phase === p.id ? p.activeColor : p.color
+                }`}
+              >
+                <span className="text-2xl flex-shrink-0">{p.emoji}</span>
+                <div>
+                  <p className="font-semibold text-sm">{p.label}</p>
+                  <p className="text-[11px] opacity-70">{p.desc}</p>
+                </div>
+                {phase === p.id && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="ml-auto w-5 h-5 rounded-full bg-current flex items-center justify-center flex-shrink-0"
+                  >
+                    <Check size={11} className="text-neutral-900" />
+                  </motion.div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Confirm */}
+        <motion.button
+          onClick={() => canContinue && onConfirm(objective.trim(), phase)}
+          disabled={!canContinue}
+          animate={canContinue ? { scale: [1, 1.02, 1] } : { scale: 1 }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+          className={`w-full py-4 rounded-2xl font-bold text-base transition-all ${
+            canContinue
+              ? 'bg-gold-500 text-black hover:bg-gold-400 shadow-[0_0_20px_rgba(234,179,8,0.3)]'
+              : 'bg-neutral-800 text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          {canContinue ? 'Entrar en foco →' : 'Define objetivo + fase'}
+        </motion.button>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // Stats Card Component
 function StatsCard({ icon, value, label, color }) {
   return (
@@ -3229,6 +3621,281 @@ function StatsCard({ icon, value, label, color }) {
   )
 }
 
+
+// ============= CALENDAR SCREEN =============
+
+// Hábitos estáticos — los mismos todos los días
+const STATIC_HOBBIES = [
+  { id: 'h-1', label: 'Gym / Ejercicio', emoji: '🏋️' },
+  { id: 'h-2', label: 'Leer 30 min', emoji: '📖' },
+  { id: 'h-3', label: 'Meditación', emoji: '🧘' },
+  { id: 'h-4', label: 'Proyecto personal', emoji: '💻' },
+  { id: 'h-5', label: 'Guitarra', emoji: '🎸' },
+  { id: 'h-6', label: 'Inglés 20 min', emoji: '🌐' },
+]
+
+const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DAY_NAMES_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+function CalendarScreen({ history, projects }) {
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+
+  const [selectedDate, setSelectedDate] = useState(todayStr)
+  const [weekOffset, setWeekOffset] = useState(0) // 0=current week, -1=prev
+  const [hobbyChecks, setHobbyChecks] = useLocalStorage('hobby_checks', {})
+
+  // ── Build week (Mon-Sun) with offset ──
+  const getWeekDays = (offset = 0) => {
+    const base = new Date()
+    base.setDate(base.getDate() + offset * 7)
+    const day = base.getDay()
+    const monday = new Date(base)
+    monday.setDate(base.getDate() - (day === 0 ? 6 : day - 1))
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday)
+      d.setDate(monday.getDate() + i)
+      return d
+    })
+  }
+  const weekDays = getWeekDays(weekOffset)
+
+  const weekLabel = (() => {
+    const f = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+    return `${f(weekDays[0])} – ${f(weekDays[6])}`
+  })()
+
+  // ── Sessions of selected day ──
+  const sessionsOfDay = (history || []).filter(entry => {
+    const d = new Date(entry.date)
+    return d.toISOString().split('T')[0] === selectedDate
+  })
+
+  // ── Time grid: full 24h ──
+  const HOUR_START = 0
+  const HOUR_END = 24
+  const TOTAL_HOURS = HOUR_END - HOUR_START
+  const HOUR_HEIGHT_PX = 52 // px per hour
+
+  const sessionToBlock = (entry) => {
+    const endTime = new Date(entry.date)
+    const durationMs = (entry.duration || 0) * 1000
+    const startTime = new Date(endTime - durationMs)
+
+    const startH = startTime.getHours() + startTime.getMinutes() / 60
+    const endH = endTime.getHours() + endTime.getMinutes() / 60
+
+    const top = Math.max(0, (startH - HOUR_START) * HOUR_HEIGHT_PX)
+    const height = Math.max(20, (endH - startH) * HOUR_HEIGHT_PX)
+    const project = (projects || []).find(p => p.id === entry.projectId)
+    return { top, height, entry, project, startTime, endTime }
+  }
+
+  // ── Hobby toggle ──
+  const toggleHobby = (hobbyId) => {
+    const key = `${selectedDate}_${hobbyId}`
+    setHobbyChecks(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+  const isChecked = (hobbyId) => !!hobbyChecks[`${selectedDate}_${hobbyId}`]
+
+  const selDate = new Date(selectedDate + 'T12:00:00')
+  const selDayOfWeek = selDate.getDay()
+  const doneCount = STATIC_HOBBIES.filter(h => isChecked(h.id)).length
+
+  const fmt = (date) => date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+
+  const blocks = sessionsOfDay.map(sessionToBlock)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="min-h-screen w-full pt-20 pb-8"
+    >
+      {/* ── Title ── */}
+      <div className="px-6 mb-5">
+        <h1 className="text-4xl font-bold">Calendario</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {DAY_NAMES_FULL[selDayOfWeek]}, {selDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      </div>
+
+      {/* ── Week nav ── */}
+      <div className="flex items-center gap-3 px-6 mb-3">
+        <button
+          onClick={() => setWeekOffset(v => v - 1)}
+          className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors"
+        >
+          <ChevronDown size={16} className="rotate-90" />
+        </button>
+        <span className="flex-1 text-center text-sm font-medium text-gray-400">{weekLabel}</span>
+        <button
+          onClick={() => setWeekOffset(v => v + 1)}
+          disabled={weekOffset >= 0}
+          className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors disabled:opacity-30"
+        >
+          <ChevronDown size={16} className="-rotate-90" />
+        </button>
+        {weekOffset !== 0 && (
+          <button
+            onClick={() => { setWeekOffset(0); setSelectedDate(todayStr) }}
+            className="text-xs text-gold-400 hover:text-gold-300 transition-colors px-1"
+          >
+            Hoy
+          </button>
+        )}
+      </div>
+
+      {/* ── Day selector ── */}
+      <div className="flex gap-2 px-6 mb-5 overflow-x-auto pb-1">
+        {weekDays.map((d, i) => {
+          const ds = d.toISOString().split('T')[0]
+          const isToday = ds === todayStr
+          const isSel = ds === selectedDate
+          const hasSessions = (history || []).some(e => new Date(e.date).toISOString().split('T')[0] === ds)
+          return (
+            <button
+              key={i}
+              onClick={() => setSelectedDate(ds)}
+              className={`flex-shrink-0 flex flex-col items-center px-3 py-2.5 rounded-2xl transition-all ${isSel
+                ? 'bg-gold-500 text-black'
+                : isToday
+                  ? 'bg-neutral-700 text-white'
+                  : 'bg-neutral-850 text-gray-400 hover:bg-neutral-800'
+                }`}
+            >
+              <span className="text-[10px] font-medium uppercase tracking-wide">{DAY_NAMES[d.getDay()]}</span>
+              <span className="text-lg font-bold">{d.getDate()}</span>
+              {hasSessions && (
+                <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSel ? 'bg-black/50' : 'bg-gold-500'}`} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Hábitos (estáticos, mismos cada día) ── */}
+      <div className="mx-6 mb-5 bg-neutral-850/60 rounded-2xl p-4 border border-neutral-800">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-gray-300">Hábitos del día</p>
+          <span className="text-xs text-gold-400 font-medium">{doneCount}/{STATIC_HOBBIES.length} completados</span>
+        </div>
+        <div className="w-full bg-neutral-700 rounded-full h-1 mb-4">
+          <motion.div
+            animate={{ width: `${(doneCount / STATIC_HOBBIES.length) * 100}%` }}
+            className="h-1 rounded-full bg-gold-500"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {STATIC_HOBBIES.map(hobby => (
+            <button
+              key={hobby.id}
+              onClick={() => toggleHobby(hobby.id)}
+              className={`flex items-center gap-2 p-2.5 rounded-xl transition-all text-left border ${isChecked(hobby.id)
+                ? 'bg-gold-500/10 border-gold-500/30'
+                : 'bg-neutral-800/50 border-neutral-700 hover:border-neutral-600'
+                }`}
+            >
+              <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all ${isChecked(hobby.id) ? 'bg-gold-500' : 'border border-neutral-600'
+                }`}>
+                {isChecked(hobby.id) && <Check size={10} className="text-black" />}
+              </div>
+              <span className="text-base">{hobby.emoji}</span>
+              <span className={`text-xs leading-tight ${isChecked(hobby.id) ? 'line-through text-gray-500' : 'text-gray-300'
+                }`}>
+                {hobby.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Time grid (always visible, full 0–24h) ── */}
+      <div className="mx-6">
+        <p className="text-sm font-semibold text-gray-300 mb-3">
+          Sesiones del día
+          {sessionsOfDay.length > 0 && (
+            <span className="ml-2 text-xs text-gray-500 font-normal">
+              {sessionsOfDay.length} sesión{sessionsOfDay.length !== 1 ? 'es' : ''} · {Math.round(sessionsOfDay.reduce((s, e) => s + (e.duration || 0), 0) / 60)} min
+            </span>
+          )}
+        </p>
+        <div
+          className="relative rounded-2xl bg-neutral-900 border border-neutral-800 overflow-hidden"
+          style={{ height: `${TOTAL_HOURS * HOUR_HEIGHT_PX}px` }}
+        >
+          {/* Hour lines + labels */}
+          {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => (
+            <div
+              key={i}
+              className="absolute left-0 right-0 flex items-center"
+              style={{ top: `${i * HOUR_HEIGHT_PX}px` }}
+            >
+              <span className="text-[9px] text-gray-700 w-10 text-right pr-2 flex-shrink-0 select-none">
+                {i < 24 ? `${String(i).padStart(2, '0')}:00` : ''}
+              </span>
+              <div className={`flex-1 border-t ${i % 6 === 0 ? 'border-neutral-700' : 'border-neutral-800/60'}`} />
+            </div>
+          ))}
+
+          {/* Current time indicator */}
+          {selectedDate === todayStr && (() => {
+            const now = new Date()
+            const nowH = now.getHours() + now.getMinutes() / 60
+            return (
+              <div className="absolute left-10 right-0 flex items-center z-10" style={{ top: `${nowH * HOUR_HEIGHT_PX}px` }}>
+                <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 flex-shrink-0" />
+                <div className="flex-1 border-t border-red-500/60" />
+              </div>
+            )
+          })()}
+
+          {/* Session blocks */}
+          {blocks.map(({ top, height, entry, project, startTime, endTime }, idx) => (
+            <motion.div
+              key={entry.id || idx}
+              initial={{ opacity: 0, scaleY: 0.8 }}
+              animate={{ opacity: 1, scaleY: 1 }}
+              transition={{ delay: idx * 0.04 }}
+              className="absolute left-11 right-2 rounded-xl px-3 py-1.5 overflow-hidden z-20"
+              style={{
+                top: `${top}px`,
+                height: `${height}px`,
+                background: 'linear-gradient(135deg, rgba(234,179,8,0.28), rgba(234,179,8,0.10))',
+                border: '1px solid rgba(234,179,8,0.40)',
+              }}
+            >
+              <div className="flex items-start gap-1.5 h-full">
+                <span className="text-sm flex-shrink-0 mt-0.5">{project?.emoji || '🎯'}</span>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-gold-400 truncate leading-tight">{entry.projectName}</p>
+                  {height > 30 && (
+                    <p className="text-[9px] text-gray-500">{fmt(startTime)} – {fmt(endTime)}</p>
+                  )}
+                  {height > 46 && (
+                    <p className="text-[9px] text-gray-500">{Math.round((entry.duration || 0) / 60)} min · {entry.deepworksCompleted} DW</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+
+          {/* Empty hint */}
+          {blocks.length === 0 && (
+            <div
+              style={{ top: `${8 * HOUR_HEIGHT_PX}px`, height: `${3 * HOUR_HEIGHT_PX}px` }}
+              className="absolute left-10 right-2 flex flex-col items-center justify-center gap-1 text-gray-700 pointer-events-none"
+            >
+              <CalendarDays size={24} className="opacity-25" />
+              <p className="text-xs opacity-40">Sin sesiones</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
 
 export default App
 
