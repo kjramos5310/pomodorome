@@ -445,6 +445,23 @@ function App() {
                   setMood(selectedMood)
                   setDeepworkCount(moodConfigs[selectedMood].suggested)
                   addLog('mood_set', { mood: selectedMood })
+                  setScreen('warmup')
+                }}
+              />
+            )}
+
+            {screen === 'warmup' && (
+              <WarmUpScreen
+                key="warmup"
+                mood={mood}
+                currentDeepwork={currentDeepwork}
+                totalDeepworks={deepworkCount}
+                duration={moodConfigs[mood].warmupTime}
+                onComplete={() => {
+                  addLog('warmup_complete', {
+                    duration_seconds: moodConfigs[mood].warmupTime,
+                    deepwork_number: currentDeepwork
+                  })
                   setScreen('objective')
                 }}
               />
@@ -473,23 +490,6 @@ function App() {
                   setDeepworkCount(count)
                   // Sobrescribimos la duración sugerida por el mood
                   moodConfigs[mood].focusTime = duration * 60
-                  setScreen('warmup')
-                }}
-              />
-            )}
-
-            {screen === 'warmup' && (
-              <WarmUpScreen
-                key="warmup"
-                mood={mood}
-                currentDeepwork={currentDeepwork}
-                totalDeepworks={deepworkCount}
-                duration={moodConfigs[mood].warmupTime}
-                onComplete={() => {
-                  addLog('warmup_complete', {
-                    duration_seconds: moodConfigs[mood].warmupTime,
-                    deepwork_number: currentDeepwork
-                  })
                   setScreen('questions')
                 }}
               />
@@ -759,11 +759,11 @@ function HeroScreen({ onStart, currentRank, currentLevel, progressToNext, histor
     return () => clearInterval(t)
   }, [])
 
-  // Today's accumulated hours from history
-  const todayStr = now.toISOString().split('T')[0]
+  // Today's accumulated hours from history (using local timezone date)
+  const todayStr = now.toLocaleDateString()
   const todaySeconds = (history || []).reduce((sum, entry) => {
     const d = new Date(entry.date)
-    if (d.toISOString().split('T')[0] === todayStr) return sum + (entry.duration || 0)
+    if (d.toLocaleDateString() === todayStr) return sum + (entry.duration || 0)
     return sum
   }, 0)
   const todayHours = todaySeconds / 3600
