@@ -5,6 +5,18 @@ import { useAppData } from './hooks/useAppData'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import './index.css'
 
+// ============= DATE HELPERS =============
+const getLocalYMD = (date) => {
+  const d = date ? new Date(date) : new Date()
+  const offset = d.getTimezoneOffset() * 60000
+  return new Date(d.getTime() - offset).toISOString().split('T')[0]
+}
+const getLocalYMDH = (date) => {
+  const d = date ? new Date(date) : new Date()
+  const offset = d.getTimezoneOffset() * 60000
+  return new Date(d.getTime() - offset).toISOString().substring(0, 13)
+}
+
 // ============= MAIN APP COMPONENT =============
 function App() {
   // Cargar configuración desde JSON externo
@@ -760,10 +772,9 @@ function HeroScreen({ onStart, currentRank, currentLevel, progressToNext, histor
   }, [])
 
   // Today's accumulated hours from history (using local timezone date)
-  const todayStr = now.toLocaleDateString()
+  const todayStr = getLocalYMD()
   const todaySeconds = (history || []).reduce((sum, entry) => {
-    const d = new Date(entry.date)
-    if (d.toLocaleDateString() === todayStr) return sum + (entry.duration || 0)
+    if (getLocalYMD(entry.date) === todayStr) return sum + (entry.duration || 0)
     return sum
   }, 0)
   const todayHours = todaySeconds / 3600
@@ -3102,10 +3113,10 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
   // ── Streak ──────────────────────────────────────────────────────
   const calcStreak = () => {
     if (history.length === 0) return { current: 0, best: 0 }
-    const dates = [...new Set(history.map(e => e.date.split('T')[0]))].sort((a, b) => b.localeCompare(a))
-    const today = new Date().toISOString().split('T')[0]
+    const dates = [...new Set(history.map(e => getLocalYMD(e.date)))].sort((a, b) => b.localeCompare(a))
+    const today = getLocalYMD()
     const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
-    const yStr = yesterday.toISOString().split('T')[0]
+    const yStr = getLocalYMD(yesterday)
     let current = 0
     if (dates[0] === today || dates[0] === yStr) {
       current = 1
@@ -3126,27 +3137,27 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
   // ── Chart data by tab ────────────────────────────────────────────
   const getDays = (n) => Array.from({ length: n }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (n - 1 - i))
-    return d.toISOString().split('T')[0]
+    return getLocalYMD(d)
   })
   const getHours = () => Array.from({ length: 24 }, (_, i) => {
     const d = new Date(); d.setHours(d.getHours() - (23 - i))
-    return d.toISOString().substring(0, 13)
+    return getLocalYMDH(d)
   })
 
   const tabConfig = {
     daily: {
       data: getHours(),
-      match: e => e.date.substring(0, 13),
+      match: e => getLocalYMDH(e.date),
       labelFn: (d, i) => i === 0 ? 'Hoy' : ''
     },
     weekly: {
       data: getDays(7),
-      match: e => e.date.split('T')[0],
+      match: e => getLocalYMD(e.date),
       labelFn: d => new Date(d + 'T12:00').toLocaleDateString('es-ES', { weekday: 'short' })
     },
     monthly: {
       data: getDays(30),
-      match: e => e.date.split('T')[0],
+      match: e => getLocalYMD(e.date),
       labelFn: (d, i) => i % 5 === 0 ? new Date(d + 'T12:00').getDate() : ''
     }
   }
@@ -3173,7 +3184,7 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
   const peakHour = byHour.indexOf(Math.max(...byHour))
   const mostActiveTime = history.length ? (peakHour < 12 ? 'Mañana' : peakHour < 18 ? 'Tarde' : 'Noche') : '—'
   const totalMin = history.reduce((s, e) => s + e.duration, 0) / 60
-  const uniqueDays = new Set(history.map(e => e.date.split('T')[0])).size
+  const uniqueDays = new Set(history.map(e => getLocalYMD(e.date))).size
   const avgMin = uniqueDays > 0 ? Math.round(totalMin / uniqueDays) : 0
   const avgFocus = history.length ? `${Math.floor(avgMin / 60)}h ${avgMin % 60}m` : '—'
 
@@ -3181,7 +3192,7 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
   const WEEKS_TO_SHOW = 20;
   const todayNum = new Date();
   const historyMap = history.reduce((acc, entry) => {
-    const d = entry.date.split('T')[0];
+    const d = getLocalYMD(entry.date);
     acc[d] = (acc[d] || 0) + 1;
     return acc;
   }, {});
@@ -3197,7 +3208,7 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
       if (col === WEEKS_TO_SHOW - 1 && row > currentDayOfWk) {
         continue;
       }
-      const dateString = dateCursor.toISOString().split('T')[0];
+      const dateString = getLocalYMD(dateCursor);
       const count = historyMap[dateString] || 0;
       let level = 0;
       if (count > 0) {
@@ -3638,8 +3649,7 @@ const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const DAY_NAMES_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 function CalendarScreen({ history, projects }) {
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = getLocalYMD()
 
   const [selectedDate, setSelectedDate] = useState(todayStr)
   const [weekOffset, setWeekOffset] = useState(0) // 0=current week, -1=prev
@@ -3667,8 +3677,7 @@ function CalendarScreen({ history, projects }) {
 
   // ── Sessions of selected day ──
   const sessionsOfDay = (history || []).filter(entry => {
-    const d = new Date(entry.date)
-    return d.toISOString().split('T')[0] === selectedDate
+    return getLocalYMD(entry.date) === selectedDate
   })
 
   // ── Time grid: full 24h ──
@@ -3750,10 +3759,10 @@ function CalendarScreen({ history, projects }) {
       {/* ── Day selector ── */}
       <div className="flex gap-2 px-6 mb-5 overflow-x-auto pb-1">
         {weekDays.map((d, i) => {
-          const ds = d.toISOString().split('T')[0]
+          const ds = getLocalYMD(d)
           const isToday = ds === todayStr
           const isSel = ds === selectedDate
-          const hasSessions = (history || []).some(e => new Date(e.date).toISOString().split('T')[0] === ds)
+          const hasSessions = (history || []).some(e => getLocalYMD(e.date) === ds)
           return (
             <button
               key={i}
