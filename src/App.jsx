@@ -474,7 +474,8 @@ function App() {
                     duration_seconds: moodConfigs[mood].warmupTime,
                     deepwork_number: currentDeepwork
                   })
-                  setScreen('objective')
+                  // First block → define objective + config. Subsequent → straight to questions
+                  setScreen(sessionObjective ? 'questions' : 'objective')
                 }}
               />
             )}
