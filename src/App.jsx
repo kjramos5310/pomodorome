@@ -207,7 +207,13 @@ function App() {
           const existingIds = new Set(prev.map(e => e.id))
           const newEntries = validHistory.filter(e => !existingIds.has(e.id))
           newEntriesCount = newEntries.length
-          return [...newEntries, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date))
+          const combined = [...newEntries, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date))
+          
+          // Re-calcular XP total basado en el historial combinado
+          const totalSessions = combined.reduce((acc, entry) => acc + (entry.deepworksCompleted || (entry.duration > 300 ? 1 : 0)), 0)
+          setXP(totalSessions)
+          
+          return combined
         })
 
         // 2. Fusionar proyectos (prioridad a los importados si son más recientes o si no existen)
