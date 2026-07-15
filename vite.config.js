@@ -4,11 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    allowedHosts: true
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: ['pwa-icon.png', 'vite.svg'],
       manifest: {
         name: 'DeepWork Flow',
         short_name: 'DeepWork',
@@ -18,16 +21,38 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: 'pwa-icon.svg',
+            src: 'pwa-icon.png',
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png',
+            purpose: 'any maskable'
           },
           {
-            src: 'pwa-icon.svg',
+            src: 'pwa-icon.png',
             sizes: '512x512',
-            type: 'image/svg+xml'
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ],
+        shortcuts: [
+          {
+            name: 'Iniciar Enfoque',
+            short_name: 'Enfoque',
+            description: 'Comienza una sesión de enfoque de inmediato',
+            url: '/?start=true',
+            icons: [{ src: 'pwa-icon.png', sizes: '192x192', type: 'image/png' }]
+          },
+          {
+            name: 'Ver Métricas',
+            short_name: 'Métricas',
+            description: 'Revisa tu progreso e historial',
+            url: '/?screen=metrics',
+            icons: [{ src: 'pwa-icon.png', sizes: '192x192', type: 'image/png' }]
           }
         ]
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module'
       }
     })
   ],

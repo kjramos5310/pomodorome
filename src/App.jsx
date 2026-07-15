@@ -131,6 +131,41 @@ function App() {
     link.click()
   }
 
+  // Manejar enrutamiento desde PWA Shortcuts (Query params)
+  useEffect(() => {
+    if (!config) return
+    
+    const params = new URLSearchParams(window.location.search)
+    const screenParam = params.get('screen')
+    const startParam = params.get('start')
+
+    if (screenParam) {
+      if (['projects', 'history', 'metrics'].includes(screenParam)) {
+        setNavigationScreen(screenParam)
+      }
+    } else if (startParam === 'true') {
+      // Salta directo al focus con defaults (Inicio Rápido)
+      const quickMood = mood || 'neutro'
+      setMood(quickMood)
+      setDeepworkCount(1)
+      setQuestions(['Enfocarse en la tarea'])
+      setCurrentQuestionIndex(0)
+      setCompletedQuestions([])
+      
+      const moodConf = config?.moodConfigs?.[quickMood]
+      if (moodConf) {
+        moodConf.focusTime = 25 * 60
+      }
+      addLog('quick_start', { timestamp: new Date().toISOString() })
+      setScreen('focus')
+    }
+    
+    // Limpiar los query params del navegador para evitar bucles en F5
+    if (screenParam || startParam) {
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [config])
+
   // Importar logs
   const handleImport = (e) => {
     const file = e.target.files[0]
@@ -812,6 +847,7 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
   const [now, setNow] = useState(new Date())
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState(String(dailyGoal))
+  const [activeMobileTab, setActiveMobileTab] = useState('timer') // 'timer' | 'pilot' | 'stats'
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000)
@@ -902,7 +938,7 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="w-full relative overflow-hidden"
+      className="w-full relative overflow-hidden pt-[68px]"
       style={{ background: '#080808', fontFamily: "'Rajdhani', sans-serif", height: '100vh', display: 'flex', flexDirection: 'column' }}
     >
       {/* Scanline overlay */}
@@ -914,7 +950,7 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
       }} />
 
       {/* ── TOP HEADER BAR ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 h-[40px] shrink-0 border-b border-orange-500/10"
+      <div className="hidden lg:flex items-center justify-between px-4 h-[40px] shrink-0 border-b border-orange-500/10"
         style={{ background: 'rgba(249,115,22,0.03)' }}>
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded" style={{
@@ -928,12 +964,53 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
         </span>
       </div>
 
+      {/* ── MOBILE HUD TAB SELECTOR ───────────────────────────────────── */}
+      <div className="flex lg:hidden items-center justify-around border-b border-orange-500/10 px-4 h-[44px] shrink-0"
+        style={{ background: 'rgba(249,115,22,0.02)' }}>
+        <button
+          onClick={() => setActiveMobileTab('pilot')}
+          className={`flex-1 h-full font-bold text-xs tracking-wider transition-all border-b-2 ${
+            activeMobileTab === 'pilot'
+              ? 'border-orange-500 text-orange-500 font-extrabold text-shadow-[0_0_8px_#f97316]'
+              : 'border-transparent text-gray-500'
+          }`}
+          style={{ fontFamily: "'Rajdhani', sans-serif" }}
+        >
+          // PILOTO
+        </button>
+        <button
+          onClick={() => setActiveMobileTab('timer')}
+          className={`flex-1 h-full font-bold text-xs tracking-wider transition-all border-b-2 ${
+            activeMobileTab === 'timer'
+              ? 'border-orange-500 text-orange-500 font-extrabold text-shadow-[0_0_8px_#f97316]'
+              : 'border-transparent text-gray-500'
+          }`}
+          style={{ fontFamily: "'Rajdhani', sans-serif" }}
+        >
+          // ENFOQUE
+        </button>
+        <button
+          onClick={() => setActiveMobileTab('stats')}
+          className={`flex-1 h-full font-bold text-xs tracking-wider transition-all border-b-2 ${
+            activeMobileTab === 'stats'
+              ? 'border-orange-500 text-orange-500 font-extrabold text-shadow-[0_0_8px_#f97316]'
+              : 'border-transparent text-gray-500'
+          }`}
+          style={{ fontFamily: "'Rajdhani', sans-serif" }}
+        >
+          // REPORTES
+        </button>
+      </div>
+
       {/* ── MAIN GRID ───────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 70px)' }}>
+      <div className="flex flex-1 overflow-hidden">
 
         {/* ── ODYSSEY LEFT PANEL (image 3 style) ──────────────────────── */}
-        <div className="relative shrink-0 flex border-r border-orange-500/15 h-full overflow-hidden"
-          style={{ width: 200, background: '#090909' }}>
+        <div className={`relative shrink-0 border-orange-500/15 h-full overflow-hidden ${
+          activeMobileTab === 'pilot' ? 'flex w-full justify-center border-b border-orange-500/10' : 'hidden lg:flex lg:border-r'
+        }`}
+          style={{ width: activeMobileTab === 'pilot' ? '100%' : 200, background: '#090909' }}>
+          <div className="relative w-[200px] h-full shrink-0">
 
           {/* Hazard stripe top */}
           <div className="hud-stripe absolute top-0 left-0 right-0" style={{ zIndex: 2 }} />
@@ -1062,10 +1139,13 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
               </span>
             </div>
           </div>
+          </div>
         </div>
 
         {/* ── CENTER AREA (Locked to 100vh height, responsive scaling) ── */}
-        <div className="flex-1 flex flex-col items-center justify-between py-3 px-6 h-full overflow-hidden" style={{ minWidth: 0 }}>
+        <div className={`flex-1 flex-col items-center justify-between py-3 px-6 h-full overflow-hidden ${
+          activeMobileTab === 'timer' ? 'flex w-full' : 'hidden lg:flex'
+        }`} style={{ minWidth: 0 }}>
 
           {/* Large ring + avatar ── Responsive size */}
           <div className="relative flex items-center justify-center my-auto"
@@ -1179,7 +1259,7 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
             </div>
 
             {/* Level seg bar */}
-            <div style={{ width: 340 }} className="mb-0.5">
+            <div style={{ width: '100%', maxWidth: 340 }} className="mb-0.5">
               <div className="flex items-center justify-between mb-0.5">
                 <span className="hud-label text-[9px]">{`>> NIVEL_${currentLevel.toString().padStart(2, '0')} — ${currentRank.kanji} ${currentRank.name}`}</span>
                 <span className="hud-label text-[9px]">{Math.round(progressToNext)}%</span>
@@ -1200,7 +1280,8 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
               onClick={onStart}
               className="mb-2 hud-glow-orange"
               style={{
-                width: 340,
+                width: '100%',
+                maxWidth: 340,
                 background: 'rgba(249,115,22,0.06)',
                 border: '1px solid rgba(249,115,22,0.5)',
                 clipPath: 'polygon(10px 0%, calc(100% - 10px) 0%, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0% calc(100% - 10px), 0% 10px)',
@@ -1229,7 +1310,8 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
               whileTap={{ scale: 0.97 }}
               onClick={onQuickStart}
               style={{
-                width: 340,
+                width: '100%',
+                maxWidth: 340,
                 background: 'rgba(0,0,0,0.85)',
                 border: '1px solid rgba(249,115,22,0.35)',
                 clipPath: 'polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px)',
@@ -1268,7 +1350,10 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
         </div>
 
         {/* ── RIGHT PANELS (Scrollable sidebar on small screen heights) ── */}
-        <div className="flex flex-col gap-2 p-2 shrink-0 h-full overflow-y-auto" style={{ width: 'clamp(200px, 22vw, 250px)' }}>
+        <div className={`flex-col gap-2 p-2 shrink-0 h-full overflow-y-auto ${
+          activeMobileTab === 'stats' ? 'flex w-full items-center px-4 py-4' : 'hidden lg:flex'
+        }`} style={{ width: activeMobileTab === 'stats' ? '100%' : 'clamp(200px, 22vw, 250px)' }}>
+          <div className="w-full max-w-[340px] flex flex-col gap-3">
 
           {/* RACHA_DIARIA [MOD-01] (Matches mockup image 1 layout) */}
           <HudPanel title="RACHA_DIARIA" mod="MOD-01" id="0004-4-99" dotStatus={currentStreak > 0 ? 'active' : 'standby'}>
@@ -1356,6 +1441,7 @@ function HeroScreen({ onStart, onQuickStart, currentRank, currentLevel, progress
             <p className="hud-label text-[9px] mb-1" style={{ color: '#4b5563' }}>{currentRank.title}</p>
             <SegBar total={10} filled={Math.round((progressToNext / 100) * 10)} />
           </HudPanel>
+          </div>
         </div>
       </div>
 
@@ -1850,88 +1936,178 @@ function FocusScreen({ mood, duration, questions, currentQuestionIndex, complete
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="min-h-screen w-full flex flex-col bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950"
+      className="min-h-screen w-full flex flex-col"
+      style={{ background: '#080808', fontFamily: "'Rajdhani', sans-serif" }}
     >
       <audio ref={audioRef} loop playsInline />
       {showConfetti && <MiniConfetti />}
 
+      {/* Scanline overlay */}
+      <div className="hud-scanline" />
+
+      {/* Ambient glow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(249,115,22,0.05) 0%, transparent 70%)'
+      }} />
+
       {/* Header */}
-      <div className="p-6 flex items-center justify-between relative">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-gold-500/20 to-gold-700/20 animate-pulse" />
-        <div className="text-center">
-          <p className="text-white font-medium">Sesión de Enfoque</p>
-          <p className="text-gray-400 text-sm">Tarea {currentQuestionIndex + 1} de {questions.length}</p>
+      <div className="flex items-center justify-between px-4 h-[44px] shrink-0 border-b border-orange-500/10 z-10"
+        style={{ background: 'rgba(249,115,22,0.03)' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded" style={{
+            background: 'linear-gradient(135deg, #f97316, #ef4444)',
+            boxShadow: '0 0 10px rgba(249,115,22,0.5)'
+          }} />
+          <div className="flex flex-col">
+            <span className="hud-title text-white text-xs tracking-widest leading-none">SESIÓN DE ENFOQUE</span>
+            <span className="hud-label text-[8px] mt-0.5 leading-none" style={{ color: 'rgba(249,115,22,0.5)' }}>
+              TAREA {currentQuestionIndex + 1} DE {questions.length}
+            </span>
+          </div>
         </div>
-        <div className="w-16 flex justify-end relative">
-          {/* Selector de ruido blanco */}
-          <div className="absolute -top-2 right-0">
+        <div className="flex items-center gap-2 relative">
+          {/* Selector de ruido blanco en modo HUD */}
+          <div className="relative">
             <select
-              className="bg-neutral-800 text-xs p-2 rounded-lg text-gray-400 focus:outline-none border border-neutral-700 appearance-none text-center cursor-pointer hover:bg-neutral-700 transition-colors"
+              className="bg-neutral-950/85 text-[10px] py-1 px-3 rounded-none text-orange-400 focus:outline-none border border-orange-500/30 appearance-none text-center cursor-pointer hover:border-orange-500/60 transition-colors uppercase"
+              style={{ fontFamily: "'Share Tech Mono', monospace", letterSpacing: '0.08em' }}
               value={bgAudio}
               onChange={(e) => setBgAudio(e.target.value)}
               title="Ruido de fondo"
             >
-              <option value="">🔇 Silencio</option>
-              <option value="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3">🎧 Lofi</option>
-              <option value="https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg">🌧️ Lluvia</option>
-              <option value="https://actions.google.com/sounds/v1/water/waterfall_medium.ogg">🌊 Marrón</option>
+              <option value="">🔇 SILENCIO</option>
+              <option value="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3">🎧 LOFI</option>
+              <option value="https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg">🌧️ LLUVIA</option>
+              <option value="https://actions.google.com/sounds/v1/water/waterfall_medium.ogg">🌊 MARRÓN</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Timer */}
-      <div className="flex flex-col items-center px-8 py-8">
-        <div className="relative mb-8">
-          <svg className="w-64 h-64 transform -rotate-90">
-            <circle cx="128" cy="128" r="110" stroke="#374151" strokeWidth="6" fill="none" />
+      {/* Timer & Content */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-6 z-10">
+        
+        {/* Circular Timer Dial */}
+        <div className="relative my-4 flex items-center justify-center" style={{ width: 256, height: 256 }}>
+          <svg viewBox="0 0 256 256" className="absolute inset-0 w-full h-full"
+            style={{ filter: 'drop-shadow(0 0 4px rgba(249,115,22,0.2))' }}>
+            {/* Outer glow ring */}
+            <circle cx="128" cy="128" r="120" fill="none" stroke="rgba(249,115,22,0.03)" strokeWidth="16" />
+            {/* Track */}
+            <circle cx="128" cy="128" r="110" fill="none" stroke="rgba(249,115,22,0.08)" strokeWidth="8" />
+            {/* 36 tick marks */}
+            {Array.from({ length: 36 }).map((_, i) => {
+              const angle = (i / 36) * 360 - 90
+              const rad = angle * Math.PI / 180
+              const isMajor = i % 6 === 0
+              const r1 = 110 - (isMajor ? 8 : 4)
+              const r2 = 110 + (isMajor ? 3 : 1)
+              return (
+                <line
+                  key={i}
+                  x1={128 + r1 * Math.cos(rad)} y1={128 + r1 * Math.sin(rad)}
+                  x2={128 + r2 * Math.cos(rad)} y2={128 + r2 * Math.sin(rad)}
+                  stroke={isMajor ? 'rgba(249,115,22,0.25)' : 'rgba(249,115,22,0.08)'}
+                  strokeWidth={isMajor ? 1.5 : 0.8}
+                />
+              )
+            })}
+            {/* Progress arc */}
             <motion.circle
-              cx="128" cy="128" r="110" stroke="#F59E0B" strokeWidth="6" fill="none"
-              strokeLinecap="round"
-              style={{ strokeDasharray: 691, strokeDashoffset: 691 - (691 * progress) / 100 }}
+              cx="128" cy="128" r="110"
+              fill="none" stroke="#f97316" strokeWidth="8" strokeLinecap="butt"
+              strokeDasharray={`${2 * Math.PI * 110}`}
+              initial={{ strokeDashoffset: 2 * Math.PI * 110 }}
+              animate={{ strokeDashoffset: 2 * Math.PI * 110 * (1 - progress / 100) }}
+              transition={{ duration: 0.5, ease: 'linear' }}
+              transform="rotate(-90 128 128)"
+              style={{ filter: 'drop-shadow(0 0 8px rgba(249,115,22,0.9))' }}
             />
+            {/* Inner decorative ring */}
+            <circle cx="128" cy="128" r="95" fill="none" stroke="rgba(249,115,22,0.05)" strokeWidth="1" strokeDasharray="5 5" />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-5xl font-bold">
+          
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="hud-number text-5xl font-bold tracking-wider"
+              style={{
+                color: '#f97316',
+                textShadow: '0 0 20px rgba(249,115,22,0.6), 0 0 40px rgba(249,115,22,0.2)',
+                fontFamily: "'Orbitron', sans-serif"
+              }}>
               {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+            </span>
+            <span className="hud-label text-[8px] mt-1" style={{ color: 'rgba(249,115,22,0.4)', letterSpacing: '0.15em' }}>
+              // TIME_REMAINING
             </span>
           </div>
         </div>
 
-        {/* Current Question */}
-        <div className="bg-neutral-850/50 backdrop-blur-sm p-8 rounded-3xl max-w-2xl w-full mb-8">
-          <h3 className="text-2xl font-medium text-center">
+        {/* Current Question Styled as HudPanel */}
+        <HudPanel title="OBJETIVO_DE_ENFOQUE" mod="DW-T02" id="0048-Q" dotStatus="active" className="w-full max-w-sm mb-6">
+          <h3 className="text-xl font-bold text-center text-orange-400 py-2" style={{ fontFamily: "'Rajdhani', sans-serif" }}>
             {questions[currentQuestionIndex]}
           </h3>
-        </div>
+        </HudPanel>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-4 w-full max-w-sm mt-4">
-          <div className="flex gap-4 w-full">
-            <button
+        {/* Actions Section */}
+        <div className="flex flex-col gap-4 w-full max-w-sm">
+          <div className="flex gap-3 w-full">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setShowAddQuestion(true)}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-full transition-colors"
+              className="flex-1 flex items-center justify-center gap-2"
+              style={{
+                padding: '10px 14px',
+                background: 'rgba(249,115,22,0.04)',
+                border: '1px solid rgba(249,115,22,0.3)',
+                clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)',
+                cursor: 'pointer',
+                color: '#f97316'
+              }}
             >
-              <Plus size={20} />
-              <span className="text-sm">Pregunta</span>
-            </button>
-            <button
+              <Plus size={16} />
+              <span className="hud-label font-bold text-xs" style={{ color: '#f97316' }}>PREGUNTA</span>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setShowInbox(true)}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-full transition-colors text-blue-400"
+              className="flex-1 flex items-center justify-center gap-2"
+              style={{
+                padding: '10px 14px',
+                background: 'rgba(59,130,246,0.04)',
+                border: '1px solid rgba(59,130,246,0.3)',
+                clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)',
+                cursor: 'pointer',
+                color: '#60a5fa'
+              }}
             >
-              <Plus size={20} />
-              <span className="text-sm">Distracción</span>
-            </button>
+              <Plus size={16} />
+              <span className="hud-label font-bold text-xs" style={{ color: '#60a5fa' }}>DISTRACCIÓN</span>
+            </motion.button>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
             onClick={handleCompleteQuestion}
             disabled={completedQuestions.includes(currentQuestionIndex)}
-            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gold-500 hover:bg-gold-600 text-black font-bold rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 hud-glow-orange disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              padding: '14px 20px',
+              background: 'linear-gradient(135deg, #f97316, #ef4444)',
+              color: '#000',
+              fontWeight: 800,
+              fontSize: 14,
+              letterSpacing: '0.15em',
+              clipPath: 'polygon(10px 0%, calc(100% - 10px) 0%, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0% calc(100% - 10px), 0% 10px)',
+              cursor: 'pointer'
+            }}
           >
-            <Check size={20} />
+            <Check size={18} />
             <span>COMPLETÉ ESTO</span>
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -2609,6 +2785,11 @@ function Sidebar({ show, onClose, onNavigate, currentScreen }) {
     onClose()
   }
 
+  const isCurrentActive = (item) => {
+    if (item.id === 'home') return currentScreen === null
+    return currentScreen === item.id
+  }
+
   return (
     <AnimatePresence>
       {show && (
@@ -2628,41 +2809,87 @@ function Sidebar({ show, onClose, onNavigate, currentScreen }) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 bottom-0 w-72 bg-neutral-900 z-50 border-r border-neutral-800"
+            className="fixed left-0 top-0 bottom-0 w-72 z-50 border-r border-orange-500/15"
+            style={{ background: '#080808', fontFamily: "'Rajdhani', sans-serif" }}
           >
+            {/* Scanline overlay */}
+            <div className="hud-scanline" />
+
             {/* Header */}
-            <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">DeepWork</h2>
+            <div className="p-6 border-b border-orange-500/10 flex items-center justify-between relative"
+              style={{ background: 'rgba(249,115,22,0.02)' }}>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="hud-dot active" style={{ width: 6, height: 6 }} />
+                  <h2 className="hud-title text-white text-lg leading-none tracking-wider font-bold">DEEPWORK</h2>
+                </div>
+                <span className="hud-label text-[8px] mt-1.5" style={{ color: 'rgba(249,115,22,0.4)', letterSpacing: '0.15em' }}>
+                  // SYSTEM_NAVIGATION_CORE
+                </span>
+              </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-neutral-800 rounded-lg transition-colors"
+                className="p-2 text-orange-400 hover:text-orange-500 transition-colors border border-orange-500/20 hover:border-orange-500/50"
+                style={{
+                  clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)',
+                  background: 'rgba(249,115,22,0.02)',
+                  cursor: 'pointer'
+                }}
               >
-                <X size={20} />
+                <X size={16} />
               </button>
             </div>
 
             {/* Menu Items */}
-            <div className="p-4">
-              {menuItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavigate(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors mb-2 ${item.special
-                    ? 'bg-gold-500 hover:bg-gold-600 text-black font-semibold'
-                    : currentScreen === item.id
-                      ? 'bg-gold-500 text-black'
-                      : 'hover:bg-neutral-800'
-                    }`}
-                >
-                  <item.icon size={20} />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              ))}
+            <div className="p-4 flex flex-col gap-3">
+              {menuItems.map(item => {
+                const active = isCurrentActive(item)
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavigate(item.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 transition-all text-left relative overflow-hidden"
+                    style={{
+                      background: item.special
+                        ? 'linear-gradient(135deg, #f97316, #ef4444)'
+                        : active
+                          ? 'rgba(249,115,22,0.08)'
+                          : 'rgba(0,0,0,0.45)',
+                      border: item.special
+                        ? '1px solid rgba(249,115,22,0.8)'
+                        : active
+                          ? '1px solid rgba(249,115,22,0.6)'
+                          : '1px solid rgba(249,115,22,0.15)',
+                      color: item.special
+                        ? '#000'
+                        : active
+                          ? '#f97316'
+                          : '#9ca3af',
+                      fontWeight: item.special || active ? 700 : 500,
+                      clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)',
+                      cursor: 'pointer',
+                      boxShadow: (item.special || active) ? '0 0 10px rgba(249,115,22,0.2)' : 'none'
+                    }}
+                  >
+                    {item.special && <div className="hud-stripe absolute top-0 left-0 right-0" style={{ height: 2 }} />}
+                    
+                    <item.icon size={18} className={active && !item.special ? 'text-orange-500' : ''} />
+                    <span className="hud-title text-xs tracking-wider" style={{ fontFamily: "'Rajdhani', sans-serif" }}>
+                      {item.special ? item.label.toUpperCase() : `// ${item.label.toUpperCase()}`}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
 
             {/* Footer */}
-            <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-neutral-800">
-              <p className="text-sm text-gray-400 text-center">Optimizado para TDAH ✨</p>
+            <div className="absolute bottom-0 left-0 right-0 p-5 border-t border-orange-500/10 flex flex-col items-center gap-1"
+              style={{ background: 'rgba(0,0,0,0.3)', fontFamily: "'Share Tech Mono', monospace" }}>
+              <div className="flex items-center gap-2">
+                <span className="hud-dot active" style={{ width: 5, height: 5 }} />
+                <span className="text-[9px] text-gray-500 tracking-wider">ADHD_CORE // ON_STANDBY</span>
+              </div>
+              <p className="text-[8px] text-gray-600">SYS_OPT_FRAME // v1.2.0</p>
             </div>
           </motion.div>
         </>
@@ -2843,38 +3070,64 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="min-h-screen w-full pt-20 pb-8"
+      className="min-h-screen w-full pt-20 pb-8 px-4 sm:px-6 relative text-white"
+      style={{ background: '#080808', fontFamily: "'Rajdhani', sans-serif" }}
     >
+      {/* Scanline overlay */}
+      <div className="hud-scanline" />
+
+      {/* Ambient glow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(249,115,22,0.03) 0%, transparent 70%)'
+      }} />
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 px-6">
-        <h1 className="text-4xl font-bold">Proyectos</h1>
+      <div className="flex items-center justify-between mb-6 px-4 z-10 relative">
+        <div>
+          <h1 className="text-3xl font-bold tracking-widest text-white uppercase leading-none">// PROYECTOS</h1>
+          <span className="hud-label text-[8px]" style={{ color: 'rgba(249,115,22,0.4)', letterSpacing: '0.15em' }}>
+            SYSTEM_DATABASE_INDEX
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           {(() => {
             const archivedCount = projects.filter(p => p.status === 'done').length
             return archivedCount > 0 ? (
               <button
                 onClick={() => setShowArchived(v => !v)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-full font-semibold transition-colors text-sm border ${showArchived
-                  ? 'bg-neutral-700 border-neutral-600 text-white'
-                  : 'bg-transparent border-neutral-600 text-gray-400 hover:border-neutral-500 hover:text-gray-300'
-                  }`}
+                className={`flex items-center gap-1.5 px-4 py-2.5 font-bold transition-all text-xs tracking-wider uppercase border ${
+                  showArchived
+                    ? 'bg-neutral-850 border-orange-500/80 text-orange-400'
+                    : 'bg-neutral-950 border-orange-500/20 text-gray-400 hover:border-orange-500/50 hover:text-orange-300'
+                }`}
+                style={{
+                  clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)',
+                  cursor: 'pointer'
+                }}
               >
                 🗃️ Archivados ({archivedCount})
               </button>
             ) : null
           })()}
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={openNew}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors text-sm"
+            className="flex items-center gap-2 px-5 py-2.5 hud-glow-orange text-black font-extrabold text-xs tracking-widest uppercase"
+            style={{
+              background: 'linear-gradient(135deg, #f97316, #ef4444)',
+              clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)',
+              cursor: 'pointer'
+            }}
           >
-            <Plus size={18} />
+            <Plus size={16} />
             Nuevo
-          </button>
+          </motion.button>
         </div>
       </div>
 
       {/* ── KANBAN HORIZONTAL SCROLL ── */}
-      <div className="flex gap-4 overflow-x-auto px-6 pb-4" style={{ scrollSnapType: 'x mandatory' }}>
+      <div className="flex gap-4 overflow-x-auto px-4 pb-6 z-10 relative scrollbar-thin" style={{ scrollSnapType: 'x mandatory' }}>
         {(showArchived
           ? projects.filter(p => p.status === 'done')
           : projects.filter(p => p.status !== 'done')
@@ -2893,72 +3146,114 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
           return (
             <motion.div
               key={project.id}
-              whileHover={{ scale: 1.02 }}
+              whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setSelectedProject(project)}
-              className={`flex-shrink-0 w-56 rounded-2xl overflow-hidden cursor-pointer bg-neutral-900 ${isActive ? 'ring-2 ring-gold-500' : ''}`}
-              style={{ scrollSnapAlign: 'start' }}
+              className="flex-shrink-0 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between"
+              style={{
+                scrollSnapAlign: 'start',
+                background: '#0d0d0d',
+                border: isActive ? '1px solid #f97316' : '1px solid rgba(249,115,22,0.15)',
+                clipPath: 'polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px)',
+                boxShadow: isActive ? '0 0 15px rgba(249,115,22,0.15)' : 'none',
+                width: '224px',
+                height: '310px'
+              }}
             >
-              {/* GIF Top */}
-              <div className="h-36 relative overflow-hidden">
-                {project.gif
-                  ? <img src={project.gif} alt={project.name} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full bg-neutral-800 flex items-center justify-center text-5xl">{project.emoji}</div>
-                }
+              {/* Media Container */}
+              <div className="h-36 relative overflow-hidden w-full border-b border-orange-500/10 bg-neutral-950">
+                {project.gif ? (
+                  <img src={project.gif} alt={project.name} className="w-full h-full object-cover opacity-80" />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-5xl relative">
+                    {/* Retro Grid Background inside Empty Card */}
+                    <div className="absolute inset-0 opacity-[0.05]" style={{
+                      backgroundImage: 'linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)',
+                      backgroundSize: '15px 15px'
+                    }} />
+                    <span>{project.emoji}</span>
+                  </div>
+                )}
                 {isActive && (
-                  <div className="absolute top-2 left-2 bg-gold-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVO</div>
+                  <div className="absolute top-2 left-2 bg-orange-500 text-black text-[9px] font-extrabold px-2 py-0.5 tracking-widest uppercase"
+                    style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}>
+                    ACTIVO
+                  </div>
                 )}
               </div>
 
               {/* Card Body */}
-              <div className="p-3">
-                <p className="font-bold text-sm leading-tight mb-1 line-clamp-2">{project.name}</p>
-
-                {daysLeft !== null && (
-                  <p className="text-xs text-gray-400 mb-2">
-                    {daysLeft > 0 ? `${daysLeft} días restantes` : 'En curso sin límite'}
+              <div className="p-4 flex-1 flex flex-col justify-between">
+                <div>
+                  <p className="font-bold text-sm leading-tight text-white mb-1 uppercase tracking-wider line-clamp-2"
+                    style={{ textShadow: isActive ? '0 0 8px rgba(249,115,22,0.3)' : 'none' }}>
+                    {project.name}
                   </p>
-                )}
 
-                {/* Hours progress */}
-                <div className="mb-2">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-400">{pct}% 💡 Horas</span>
-                    <span className="text-gray-500">{hoursLogged}h / {hoursGoalVal}h</span>
-                  </div>
-                  <div className="w-full bg-neutral-700 rounded-full h-1.5">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      className={`h-1.5 rounded-full ${pct >= 100 ? 'bg-green-400' : 'bg-gold-500'}`}
-                    />
-                  </div>
+                  {daysLeft !== null && (
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 font-mono">
+                      {daysLeft > 0 ? `// ${daysLeft} DÍAS RESTANTES` : '// EN CURSO'}
+                    </p>
+                  )}
                 </div>
 
-                {/* Status badge */}
-                <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2 ${statusCfg.color}`}>
-                  ● {statusCfg.label}
-                </span>
+                <div>
+                  {/* Hours progress bar */}
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between text-[10px] mb-1 font-mono">
+                      <span className="text-orange-400">{pct}% 💡 HORAS</span>
+                      <span className="text-gray-500">{hoursLogged}h / {hoursGoalVal}h</span>
+                    </div>
+                    <div className="w-full bg-neutral-950 border border-orange-500/10 h-2"
+                      style={{ clipPath: 'polygon(2px 0%, 100% 0%, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0% 100%, 0% 2px)' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        className="h-full bg-gradient-to-r from-orange-500 to-red-500"
+                      />
+                    </div>
+                  </div>
 
-                {/* Motivational */}
-                <p className="text-[10px] text-gray-400 leading-tight">{motivationalMsg(pct)}</p>
+                  {/* Status Badge */}
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="font-mono text-[9px] tracking-widest text-orange-500/80 uppercase">
+                      [ {statusCfg.label.toUpperCase()} ]
+                    </span>
+                    <p className="text-[8px] text-gray-500 font-mono tracking-tighter truncate text-right w-2/3">
+                      {motivationalMsg(pct)}
+                    </p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )
         })}
 
-        {/* Add card — only in active view */}
+        {/* Add card button — only in active view */}
         {!showArchived && (
           <button
             onClick={openNew}
-            className="flex-shrink-0 w-14 h-56 rounded-2xl bg-neutral-800/50 hover:bg-neutral-800 border-2 border-dashed border-neutral-700 flex items-center justify-center transition-colors"
+            className="flex-shrink-0 flex items-center justify-center transition-colors"
+            style={{
+              width: '64px',
+              height: '310px',
+              background: 'rgba(249,115,22,0.02)',
+              border: '1px dashed rgba(249,115,22,0.3)',
+              clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)',
+              cursor: 'pointer'
+            }}
           >
-            <Plus size={24} className="text-gray-500" />
+            <div className="flex flex-col items-center gap-2">
+              <Plus size={20} className="text-orange-500/60" />
+              <span className="font-mono text-[8px] text-orange-500/40 uppercase tracking-widest writing-vertical [writing-mode:vertical-lr]">
+                NUEVO_PROYECTO
+              </span>
+            </div>
           </button>
         )}
       </div>
 
-      {/* ── PROJECT DETAIL BOTTOM SHEET ── */}
+      {/* ── PROJECT DETAIL OVERLAY ── */}
       <AnimatePresence>
         {selectedProject && (() => {
           const stats = getProjectStats(selectedProject.id)
@@ -2972,7 +3267,7 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center"
+              className="fixed inset-0 bg-black/85 z-50 flex items-end justify-center px-4"
               onClick={() => setSelectedProject(null)}
             >
               <motion.div
@@ -2981,92 +3276,119 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 30, stiffness: 300 }}
                 onClick={e => e.stopPropagation()}
-                className="bg-neutral-900 rounded-t-3xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto"
+                className="w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto border-t border-l border-r border-orange-500/25 relative"
+                style={{
+                  background: '#080808',
+                  clipPath: 'polygon(16px 0%, calc(100% - 16px) 0%, 100% 16px, 100% 100%, 0% 100%, 0% 16px)'
+                }}
               >
-                {/* GIF Header */}
+                {/* Modal Scanline Overlay */}
+                <div className="hud-scanline" />
+
+                {/* Header Media */}
                 {selectedProject.gif ? (
-                  <div className="h-52 relative">
-                    <img src={selectedProject.gif} alt={selectedProject.name} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/40 to-transparent" />
+                  <div className="h-44 relative w-full border-b border-orange-500/10">
+                    <img src={selectedProject.gif} alt={selectedProject.name} className="w-full h-full object-cover opacity-70" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent" />
                     <button
                       onClick={() => setSelectedProject(null)}
-                      className="absolute top-4 right-4 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center"
+                      className="absolute top-4 right-4 w-7 h-7 bg-black/75 border border-orange-500/30 text-orange-400 hover:text-white rounded-none flex items-center justify-center cursor-pointer"
+                      style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}
                     >
-                      <X size={16} />
+                      <X size={14} />
                     </button>
                     <div className="absolute bottom-4 left-4">
-                      <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${STATUS_CONFIG[status].color}`}>
-                        ● {STATUS_CONFIG[status].label}
+                      <span className="font-mono text-[9px] tracking-wider text-orange-500 bg-[#080808] border border-orange-500/40 px-2 py-0.5 uppercase">
+                        {STATUS_CONFIG[status].label.toUpperCase()}
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-end p-4">
-                    <button onClick={() => setSelectedProject(null)} className="p-2 hover:bg-neutral-800 rounded-full">
-                      <X size={20} />
+                  <div className="flex justify-between items-center p-4 border-b border-orange-500/10">
+                    <span className="font-mono text-[9px] text-gray-500 tracking-wider">// DETALLES_PROYECTO</span>
+                    <button onClick={() => setSelectedProject(null)}
+                      className="w-7 h-7 bg-black/75 border border-orange-500/30 text-orange-400 hover:text-white flex items-center justify-center cursor-pointer"
+                      style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}>
+                      <X size={14} />
                     </button>
                   </div>
                 )}
 
-                <div className="p-6">
+                <div className="p-5 relative z-10">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h2 className="text-xl font-bold leading-tight">{selectedProject.name}</h2>
-                      {isActive && <span className="text-xs text-gold-400 font-semibold">● Proyecto activo</span>}
+                      <h2 className="text-xl font-bold leading-tight uppercase tracking-wider text-white">
+                        {selectedProject.name}
+                      </h2>
+                      {isActive && (
+                        <span className="text-[9px] text-orange-400 font-mono tracking-widest uppercase">
+                          [ // SYSTEM_ACTIVE ]
+                        </span>
+                      )}
                     </div>
-                    <span className="text-3xl">{selectedProject.emoji}</span>
+                    <span className="text-3xl p-1.5 bg-neutral-950 border border-orange-500/10"
+                      style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+                      {selectedProject.emoji}
+                    </span>
                   </div>
 
                   {/* Focus / topic */}
                   {selectedProject.focus && (
-                    <div className="mb-4 p-3 bg-neutral-800 rounded-2xl">
-                      <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Enfoque</p>
-                      <p className="text-sm text-gray-300 leading-relaxed">{selectedProject.focus}</p>
+                    <div className="mb-4 p-3 border border-orange-500/10 bg-neutral-950"
+                      style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+                      <p className="font-mono text-[8px] text-orange-400/60 uppercase tracking-widest mb-1">// DESCRIPCIÓN_ENFOQUE</p>
+                      <p className="text-sm text-gray-300 leading-relaxed font-sans">{selectedProject.focus}</p>
                     </div>
                   )}
 
                   {/* Duration info */}
                   {selectedProject.plannedDays && (
-                    <div className="flex gap-4 mb-4 text-sm text-gray-400">
-                      <span>📅 {selectedProject.plannedDays} días planificados</span>
-                      <span>🎯 {selectedProject.hoursGoal}h objetivo</span>
+                    <div className="grid grid-cols-2 gap-3 mb-4 font-mono text-[10px] uppercase text-gray-400">
+                      <div className="p-2 border border-orange-500/5 bg-neutral-950/40 text-center">
+                        📅 Días: {selectedProject.plannedDays}
+                      </div>
+                      <div className="p-2 border border-orange-500/5 bg-neutral-950/40 text-center">
+                        🎯 Meta: {selectedProject.hoursGoal}h
+                      </div>
                     </div>
                   )}
 
                   {/* Hours progress bar */}
                   <div className="mb-5">
-                    <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>Progreso de horas</span>
-                      <span>{stats.hours}h / {hoursGoalVal}h ({pct}%)</span>
+                    <div className="flex justify-between text-[10px] text-gray-400 mb-1 font-mono">
+                      <span>PROGRESO EN HORAS</span>
+                      <span className="text-orange-400">{stats.hours}h / {hoursGoalVal}h ({pct}%)</span>
                     </div>
-                    <div className="w-full bg-neutral-700 rounded-full h-2">
+                    <div className="w-full bg-neutral-950 border border-orange-500/15 h-3"
+                      style={{ clipPath: 'polygon(3px 0%, 100% 0%, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0% 100%, 0% 3px)' }}>
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${pct}%` }}
-                        className={`h-2 rounded-full ${pct >= 100 ? 'bg-green-400' : 'bg-gold-500'}`}
+                        className="h-full bg-gradient-to-r from-orange-500 to-red-500"
                       />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{motivationalMsg(pct)}</p>
+                    <p className="text-[9px] text-gray-500 mt-1.5 font-mono">// {motivationalMsg(pct).toUpperCase()}</p>
                   </div>
 
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-3 mb-5">
+                  {/* Stats HUD Grid */}
+                  <div className="grid grid-cols-3 gap-2.5 mb-5">
                     {[
                       { label: 'Deepworks', value: selectedProject.totalDeepworks, icon: '🎯' },
                       { label: 'Sesiones', value: stats.sessions, icon: '📅' },
-                      { label: 'Horas', value: stats.hours, icon: '⏱️' },
+                      { label: 'Horas loggeadas', value: `${stats.hours}h`, icon: '⏱️' },
                     ].map(({ label, value, icon }) => (
-                      <div key={label} className="bg-neutral-800 rounded-2xl p-3 text-center">
-                        <p className="text-lg mb-1">{icon}</p>
-                        <p className="text-xl font-bold text-gold-500">{value}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{label}</p>
+                      <div key={label} className="border border-orange-500/10 bg-neutral-950 p-2.5 text-center flex flex-col justify-between"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+                        <p className="text-lg leading-none">{icon}</p>
+                        <p className="text-base font-bold text-orange-400 mt-1 font-mono">{value}</p>
+                        <p className="text-[8px] font-mono text-gray-500 uppercase mt-0.5 tracking-tighter leading-none">{label}</p>
                       </div>
                     ))}
                   </div>
 
                   {/* Change status */}
                   <div className="mb-5">
-                    <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Estado</p>
+                    <p className="font-mono text-[8px] text-gray-500 uppercase tracking-widest mb-2">// ACTUALIZAR_ESTADO</p>
                     <div className="flex gap-2">
                       {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                         <button
@@ -3075,9 +3397,15 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                             onUpdateProject({ ...selectedProject, status: key })
                             setSelectedProject(prev => ({ ...prev, status: key }))
                           }}
-                          className={`flex-1 py-2 text-xs font-semibold rounded-full border transition-all ${status === key ? cfg.color : 'bg-neutral-800 text-gray-400 border-neutral-700 hover:bg-neutral-700'}`}
+                          className="flex-1 py-2 text-[10px] font-bold uppercase transition-all border cursor-pointer"
+                          style={{
+                            background: status === key ? 'rgba(249,115,22,0.1)' : 'rgba(0,0,0,0.5)',
+                            border: status === key ? '1px solid #f97316' : '1px solid rgba(249,115,22,0.15)',
+                            color: status === key ? '#f97316' : '#6b7280',
+                            clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)'
+                          }}
                         >
-                          {cfg.label}
+                          {cfg.label.toUpperCase()}
                         </button>
                       ))}
                     </div>
@@ -3086,15 +3414,16 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                   {/* Recent sessions */}
                   {stats.entries.length > 0 && (
                     <div className="mb-5">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Últimas sesiones</p>
-                      <div className="space-y-2">
+                      <p className="font-mono text-[8px] text-gray-500 uppercase tracking-widest mb-2">// LOG_DE_SESIONES</p>
+                      <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                         {stats.entries.slice(-4).reverse().map(entry => (
-                          <div key={entry.id} className="flex items-center justify-between bg-neutral-800 rounded-xl px-4 py-2.5">
+                          <div key={entry.id} className="flex items-center justify-between border border-orange-500/5 bg-neutral-950/60 px-3 py-2 font-mono text-[10px]"
+                            style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}>
                             <div>
-                              <p className="text-sm font-medium">{new Date(entry.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
-                              <p className="text-xs text-gray-400">{Math.floor(entry.duration / 60)} min</p>
+                              <p className="font-bold text-gray-300">{new Date(entry.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
+                              <p className="text-[9px] text-gray-500">{Math.floor(entry.duration / 60)} MIN</p>
                             </div>
-                            <span className="text-gold-500 font-bold text-sm">{entry.deepworksCompleted} DW</span>
+                            <span className="text-orange-400 font-extrabold">{entry.deepworksCompleted} DW</span>
                           </div>
                         ))}
                       </div>
@@ -3104,25 +3433,31 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                   {/* Actions */}
                   <div className="flex gap-3">
                     {!isActive && (
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={() => { onSelectProject(selectedProject); setSelectedProject(null) }}
-                        className="flex-1 py-3 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors"
+                        className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-black font-extrabold text-xs tracking-wider uppercase cursor-pointer"
+                        style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}
                       >
-                        Activar
-                      </button>
+                        Activar Proyecto
+                      </motion.button>
                     )}
                     {projects.length > 1 && (
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={() => {
                           if (confirm(`¿Eliminar "${selectedProject.name}"?`)) {
                             onDeleteProject(selectedProject.id)
                             setSelectedProject(null)
                           }
                         }}
-                        className="px-4 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-full transition-colors"
+                        className="px-4 py-3 bg-red-950/20 border border-red-500/25 hover:border-red-500/60 text-red-400 transition-colors cursor-pointer"
+                        style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}
                       >
-                        <Trash2 size={18} />
-                      </button>
+                        <Trash2 size={16} />
+                      </motion.button>
                     )}
                   </div>
                 </div>
@@ -3132,14 +3467,14 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
         })()}
       </AnimatePresence>
 
-      {/* ── NEW PROJECT MODAL ── */}
+      {/* ── NEW PROJECT WIZARD MODAL ── */}
       <AnimatePresence>
         {showNewProject && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center"
+            className="fixed inset-0 bg-black/85 z-50 flex items-end justify-center px-4"
             onClick={() => setShowNewProject(false)}
           >
             <motion.div
@@ -3148,18 +3483,32 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
               onClick={e => e.stopPropagation()}
-              className="bg-neutral-900 rounded-t-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto border-t border-l border-r border-orange-500/25 relative"
+              style={{
+                background: '#080808',
+                clipPath: 'polygon(16px 0%, calc(100% - 16px) 0%, 100% 16px, 100% 100%, 0% 100%, 0% 16px)'
+              }}
             >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-5">
-                  <h3 className="text-xl font-bold">
-                    {step === 'template' ? '🗂️ Elige una plantilla'
-                      : step === 'confirm' ? '✅ Confirmar'
-                        : step === 'duration' ? '⏳ Duración y objetivo'
-                          : '✏️ Personalizado'}
-                  </h3>
-                  <button onClick={() => setShowNewProject(false)} className="p-2 hover:bg-neutral-800 rounded-full">
-                    <X size={20} />
+              {/* Modal Scanline Overlay */}
+              <div className="hud-scanline" />
+
+              <div className="p-5 relative z-10">
+                <div className="flex items-center justify-between mb-5 border-b border-orange-500/10 pb-3">
+                  <div>
+                    <h3 className="text-base font-bold uppercase tracking-wider text-white">
+                      {step === 'template' ? 'Plantillas de Misión'
+                        : step === 'confirm' ? 'Confirmar Enfoque'
+                          : step === 'duration' ? 'Objetivos Temporales'
+                            : 'Misión Personalizada'}
+                    </h3>
+                    <span className="font-mono text-[7px] text-gray-500 tracking-widest leading-none">
+                      WIZARD_STAGE: {step.toUpperCase()}
+                    </span>
+                  </div>
+                  <button onClick={() => setShowNewProject(false)}
+                    className="w-7 h-7 bg-black/75 border border-orange-500/30 text-orange-400 hover:text-white flex items-center justify-center cursor-pointer"
+                    style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}>
+                    <X size={14} />
                   </button>
                 </div>
 
@@ -3169,29 +3518,30 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
 
                     {/* Principales */}
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500" />
-                        <p className="text-xs font-bold text-red-400 uppercase tracking-widest">Principales</p>
+                      <div className="flex items-center gap-1.5 mb-2 font-mono">
+                        <span className="w-1.5 h-1.5 bg-red-500" />
+                        <p className="text-[9px] font-extrabold text-red-500 uppercase tracking-widest">Misiones Principales (Core)</p>
                       </div>
                       <div className="space-y-1.5">
                         {ACTIVITY_TEMPLATES.principales.map((tpl, i) => (
                           <button
                             key={i}
                             onClick={() => handleSelectTemplate(tpl)}
-                            className="w-full flex items-center gap-3 p-3 bg-neutral-800/70 hover:bg-neutral-700 rounded-2xl transition-colors text-left border border-neutral-700/50 hover:border-red-500/30"
+                            className="w-full flex items-center gap-3 p-3 bg-neutral-950 border border-orange-500/10 hover:border-orange-500/40 transition-all text-left cursor-pointer"
+                            style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}
                           >
                             {tpl.gif ? (
-                              <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0">
+                              <div className="w-10 h-10 overflow-hidden flex-shrink-0 border border-orange-500/10">
                                 <img src={tpl.gif} alt={tpl.name} className="w-full h-full object-cover" />
                               </div>
                             ) : (
-                              <div className="w-11 h-11 rounded-xl bg-neutral-700 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
+                              <div className="w-10 h-10 bg-[#0d0d0d] border border-orange-500/10 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm">{tpl.emoji} {tpl.name}</p>
-                              <p className="text-[10px] text-gray-500 truncate">{tpl.focusExample}</p>
+                              <p className="font-bold text-sm text-gray-200 uppercase tracking-wide">{tpl.name}</p>
+                              <p className="text-[9px] text-gray-500 font-mono truncate">{tpl.focusExample.toUpperCase()}</p>
                             </div>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 flex-shrink-0">CORE</span>
+                            <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 flex-shrink-0">CORE</span>
                           </button>
                         ))}
                       </div>
@@ -3199,29 +3549,30 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
 
                     {/* Complementarias */}
                     <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                        <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">Complementarias</p>
+                      <div className="flex items-center gap-1.5 mb-2 font-mono">
+                        <span className="w-1.5 h-1.5 bg-yellow-500" />
+                        <p className="text-[9px] font-extrabold text-yellow-500 uppercase tracking-widest">Actividades Secundarias (Plus)</p>
                       </div>
                       <div className="space-y-1.5">
                         {ACTIVITY_TEMPLATES.complementarias.map((tpl, i) => (
                           <button
                             key={i}
                             onClick={() => handleSelectTemplate(tpl)}
-                            className="w-full flex items-center gap-3 p-3 bg-neutral-800/70 hover:bg-neutral-700 rounded-2xl transition-colors text-left border border-neutral-700/50 hover:border-yellow-500/30"
+                            className="w-full flex items-center gap-3 p-3 bg-neutral-950 border border-orange-500/10 hover:border-orange-500/40 transition-all text-left cursor-pointer"
+                            style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}
                           >
                             {tpl.gif ? (
-                              <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0">
+                              <div className="w-10 h-10 overflow-hidden flex-shrink-0 border border-orange-500/10">
                                 <img src={tpl.gif} alt={tpl.name} className="w-full h-full object-cover" />
                               </div>
                             ) : (
-                              <div className="w-11 h-11 rounded-xl bg-neutral-700 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
+                              <div className="w-10 h-10 bg-[#0d0d0d] border border-orange-500/10 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm">{tpl.emoji} {tpl.name}</p>
-                              <p className="text-[10px] text-gray-500 truncate">{tpl.focusExample}</p>
+                              <p className="font-bold text-sm text-gray-200 uppercase tracking-wide">{tpl.name}</p>
+                              <p className="text-[9px] text-gray-500 font-mono truncate">{tpl.focusExample.toUpperCase()}</p>
                             </div>
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 flex-shrink-0">PLUS</span>
+                            <span className="font-mono text-[8px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex-shrink-0">PLUS</span>
                           </button>
                         ))}
                       </div>
@@ -3229,16 +3580,17 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
 
                     {/* Custom */}
                     <div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 font-mono">
                         {ACTIVITY_TEMPLATES.custom.map((tpl, i) => (
                           <button
                             key={i}
                             onClick={() => handleSelectTemplate(tpl)}
-                            className="w-full flex items-center gap-3 p-3 bg-neutral-800/50 hover:bg-neutral-700 rounded-2xl transition-colors text-left border border-dashed border-neutral-700/50"
+                            className="w-full flex items-center gap-3 p-3 bg-neutral-950 border border-dashed border-orange-500/20 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all text-left cursor-pointer"
+                            style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}
                           >
-                            <div className="w-11 h-11 rounded-xl bg-neutral-700 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
+                            <div className="w-10 h-10 bg-[#0d0d0d] border border-orange-500/5 flex items-center justify-center text-xl flex-shrink-0">{tpl.emoji}</div>
                             <div className="flex-1">
-                              <p className="text-sm text-gray-400">{tpl.name}</p>
+                              <p className="text-xs text-gray-400 uppercase tracking-widest">{tpl.name.toUpperCase()}</p>
                             </div>
                           </button>
                         ))}
@@ -3252,26 +3604,32 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                 {step === 'confirm' && selectedTemplate && (
                   <div>
                     {selectedTemplate.gif && (
-                      <div className="h-40 rounded-2xl overflow-hidden mb-4">
-                        <img src={selectedTemplate.gif} alt={selectedTemplate.name} className="w-full h-full object-cover" />
+                      <div className="h-40 overflow-hidden mb-4 border border-orange-500/10"
+                        style={{ clipPath: 'polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px)' }}>
+                        <img src={selectedTemplate.gif} alt={selectedTemplate.name} className="w-full h-full object-cover opacity-85" />
                       </div>
                     )}
-                    <p className="text-lg font-semibold mb-1">{selectedTemplate.emoji} {selectedTemplate.name}</p>
-                    <p className="text-xs text-gray-400 mb-4">¿De qué va a tratar este proyecto?</p>
+                    <p className="text-base font-bold uppercase tracking-wider text-orange-400 mb-1">{selectedTemplate.emoji} {selectedTemplate.name.toUpperCase()}</p>
+                    <p className="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-3">// ¿EN QUÉ SUBTAREA O ÁREA DE TRABAJO TE ENFOCARÁS?</p>
                     <textarea
                       value={projectFocus}
                       onChange={e => setProjectFocus(e.target.value)}
-                      placeholder="Ej: Aprender redes, completar el curso de Python, mejorar mi físico..."
+                      placeholder="Ej: Completar el módulo de API, practicar vocabulario diario, mejorar técnica..."
                       rows={3}
-                      className="w-full p-3 bg-neutral-800 border border-neutral-700 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-gold-500 text-sm resize-none mb-4"
+                      className="w-full p-3 bg-neutral-950 border border-orange-500/20 text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 text-sm resize-none mb-4 font-sans"
+                      style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}
                       autoFocus
                     />
                     <div className="flex gap-3">
-                      <button onClick={() => setStep('template')} className="flex-1 py-3 bg-neutral-700 hover:bg-neutral-600 rounded-full transition-colors">
+                      <button onClick={() => setStep('template')}
+                        className="flex-1 py-3 bg-neutral-950 border border-orange-500/20 text-gray-400 hover:text-white text-xs uppercase font-extrabold cursor-pointer"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
                         Atrás
                       </button>
-                      <button onClick={() => setStep('duration')} className="flex-1 py-3 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors">
-                        Continuar →
+                      <button onClick={() => setStep('duration')}
+                        className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-black text-xs uppercase font-extrabold cursor-pointer"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+                        Continuar
                       </button>
                     </div>
                   </div>
@@ -3280,17 +3638,23 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                 {/* STEP 3: duration & hours goal */}
                 {step === 'duration' && (
                   <div>
-                    <div className="mb-6">
-                      <p className="text-sm font-semibold mb-1">📅 ¿Cuántos días dura este proyecto?</p>
-                      <p className="text-xs text-gray-400 mb-3">Ej: 3 días, 1 semana (7), 2 semanas (14)</p>
-                      <div className="flex gap-2 mb-3 flex-wrap">
+                    <div className="mb-5">
+                      <p className="text-xs font-mono text-orange-400 uppercase tracking-widest mb-1">// PLAZO DE EJECUCIÓN (DÍAS)</p>
+                      <p className="text-[9px] text-gray-500 font-mono mb-2">SELECCIONA EL TIEMPO ESTIMADO PARA LA META</p>
+                      <div className="flex gap-1.5 mb-2.5 flex-wrap">
                         {[1, 3, 7, 14, 30].map(d => (
                           <button
                             key={d}
                             onClick={() => setPlannedDays(d)}
-                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${plannedDays === d ? 'bg-gold-500 text-black' : 'bg-neutral-800 text-gray-300 hover:bg-neutral-700'}`}
+                            className="px-3 py-1.5 text-xs font-bold uppercase transition-all border cursor-pointer"
+                            style={{
+                              background: plannedDays === d ? 'rgba(249,115,22,0.1)' : 'rgba(0,0,0,0.5)',
+                              border: plannedDays === d ? '1px solid #f97316' : '1px solid rgba(249,115,22,0.15)',
+                              color: plannedDays === d ? '#f97316' : '#6b7280',
+                              clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)'
+                            }}
                           >
-                            {d === 1 ? '1 día' : d === 7 ? '1 semana' : d === 14 ? '2 semanas' : d === 30 ? '1 mes' : `${d} días`}
+                            {d === 1 ? '1 DÍA' : d === 7 ? '1 SEMANA' : d === 14 ? '2 SEMANAS' : d === 30 ? '1 MES' : `${d} DÍAS`}
                           </button>
                         ))}
                       </div>
@@ -3298,23 +3662,30 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                         type="number"
                         value={plannedDays}
                         onChange={e => setPlannedDays(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full p-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white focus:outline-none focus:border-gold-500 text-sm"
-                        placeholder="Días personalizados..."
+                        className="w-full p-2.5 bg-neutral-950 border border-orange-500/20 text-white focus:outline-none focus:border-orange-500 text-xs font-mono"
+                        style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}
+                        placeholder="DIAS PERSONALIZADOS"
                         min={1}
                       />
                     </div>
 
-                    <div className="mb-6">
-                      <p className="text-sm font-semibold mb-1">⏱️ ¿Cuántas horas objetivo?</p>
-                      <p className="text-xs text-gray-400 mb-3">Total de horas de trabajo enfocado que planeas completar</p>
-                      <div className="flex gap-2 mb-3 flex-wrap">
+                    <div className="mb-5">
+                      <p className="text-xs font-mono text-orange-400 uppercase tracking-widest mb-1">// CUOTA DE TRABAJO (HORAS METAS)</p>
+                      <p className="text-[9px] text-gray-500 font-mono mb-2">HORAS TOTALES DE ENFOQUE A LOGRAR</p>
+                      <div className="flex gap-1.5 mb-2.5 flex-wrap">
                         {[5, 10, 20, 40, 80].map(h => (
                           <button
                             key={h}
                             onClick={() => setHoursGoal(h)}
-                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${hoursGoal === h ? 'bg-gold-500 text-black' : 'bg-neutral-800 text-gray-300 hover:bg-neutral-700'}`}
+                            className="px-3 py-1.5 text-xs font-bold uppercase transition-all border cursor-pointer"
+                            style={{
+                              background: hoursGoal === h ? 'rgba(249,115,22,0.1)' : 'rgba(0,0,0,0.5)',
+                              border: hoursGoal === h ? '1px solid #f97316' : '1px solid rgba(249,115,22,0.15)',
+                              color: hoursGoal === h ? '#f97316' : '#6b7280',
+                              clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)'
+                            }}
                           >
-                            {h}h
+                            {h}H
                           </button>
                         ))}
                       </div>
@@ -3322,18 +3693,23 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                         type="number"
                         value={hoursGoal}
                         onChange={e => setHoursGoal(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full p-3 bg-neutral-800 border border-neutral-700 rounded-xl text-white focus:outline-none focus:border-gold-500 text-sm"
-                        placeholder="Horas personalizadas..."
+                        className="w-full p-2.5 bg-neutral-950 border border-orange-500/20 text-white focus:outline-none focus:border-orange-500 text-xs font-mono"
+                        style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}
+                        placeholder="HORAS PERSONALIZADAS"
                         min={1}
                       />
                     </div>
 
                     <div className="flex gap-3">
-                      <button onClick={() => setStep(selectedTemplate?.name === 'Proyecto personalizado' ? 'custom' : 'confirm')} className="flex-1 py-3 bg-neutral-700 hover:bg-neutral-600 rounded-full transition-colors">
+                      <button onClick={() => setStep(selectedTemplate?.name === 'Proyecto personalizado' ? 'custom' : 'confirm')}
+                        className="flex-1 py-3 bg-neutral-950 border border-orange-500/20 text-gray-400 hover:text-white text-xs uppercase font-extrabold cursor-pointer"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
                         Atrás
                       </button>
-                      <button onClick={handleCreate} className="flex-1 py-3 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors">
-                        Crear proyecto
+                      <button onClick={handleCreate}
+                        className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-black text-xs uppercase font-extrabold cursor-pointer"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+                        CREAR PROYECTO
                       </button>
                     </div>
                   </div>
@@ -3343,45 +3719,56 @@ function ProjectsScreen({ projects, currentProject, onSelectProject, onAddProjec
                 {step === 'custom' && (
                   <div>
                     <div className="mb-4">
-                      <p className="text-xs text-gray-400 mb-2">Emoji</p>
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <p className="text-[10px] font-mono text-orange-400 uppercase tracking-widest mb-1.5">// SELECCIONA ICONO</p>
+                      <div className="flex flex-wrap gap-1.5 mb-4">
                         {emojis.map(e => (
                           <button key={e} onClick={() => setCustomEmoji(e)}
-                            className={`text-2xl p-2 rounded-lg transition-all ${customEmoji === e ? 'bg-gold-500 scale-110' : 'bg-neutral-800 hover:bg-neutral-700'}`}>
+                            className="text-xl p-1.5 bg-[#0d0d0d] border border-orange-500/10 hover:border-orange-500/40 transition-all cursor-pointer"
+                            style={{
+                              background: customEmoji === e ? 'rgba(249,115,22,0.1)' : 'rgba(0,0,0,0.5)',
+                              border: customEmoji === e ? '1px solid #f97316' : '1px solid rgba(249,115,22,0.15)',
+                              clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)'
+                            }}>
                             {e}
                           </button>
                         ))}
                       </div>
-                      <p className="text-xs text-gray-400 mb-2">Nombre del proyecto</p>
+                      <p className="text-[10px] font-mono text-orange-400 uppercase tracking-widest mb-1.5">// NOMBRE DEL PROYECTO</p>
                       <input
                         type="text"
                         value={customName}
                         onChange={e => setCustomName(e.target.value)}
-                        placeholder="Ej: Duel #1 || Mi Proyecto"
-                        className="w-full p-4 bg-neutral-800 border border-neutral-700 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-gold-500 mb-4"
+                        placeholder="Ej: DUEL_TACTICAL || DESARROLLO_WEB"
+                        className="w-full p-3 bg-neutral-950 border border-orange-500/20 text-white placeholder-gray-650 focus:outline-none focus:border-orange-500 mb-4 text-xs font-mono"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}
                         autoFocus
                       />
-                      <p className="text-xs text-gray-400 mb-2">Link del GIF (opcional)</p>
+                      <p className="text-[10px] font-mono text-orange-400 uppercase tracking-widest mb-1.5">// ENLACE DE IMAGEN/GIF (OPCIONAL)</p>
                       <input
                         type="text"
                         value={customGif}
                         onChange={e => setCustomGif(e.target.value)}
                         placeholder="https://media.giphy.com/..."
-                        className="w-full p-4 bg-neutral-800 border border-neutral-700 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-gold-500"
+                        className="w-full p-3 bg-neutral-950 border border-orange-500/20 text-white placeholder-gray-650 focus:outline-none focus:border-orange-500 text-xs font-mono"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}
                       />
                       {customGif && (
-                        <div className="h-32 rounded-2xl overflow-hidden mt-3">
-                          <img src={customGif} alt="preview" className="w-full h-full object-cover" />
+                        <div className="h-28 overflow-hidden mt-3 border border-orange-500/10"
+                          style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}>
+                          <img src={customGif} alt="preview" className="w-full h-full object-cover opacity-80" />
                         </div>
                       )}
                     </div>
                     <div className="flex gap-3">
-                      <button onClick={() => setStep('template')} className="flex-1 py-3 bg-neutral-700 hover:bg-neutral-600 rounded-full transition-colors">
+                      <button onClick={() => setStep('template')}
+                        className="flex-1 py-3 bg-neutral-950 border border-orange-500/20 text-gray-400 hover:text-white text-xs uppercase font-extrabold cursor-pointer"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
                         Atrás
                       </button>
                       <button onClick={() => setStep('duration')} disabled={!customName.trim()}
-                        className="flex-1 py-3 bg-gold-500 hover:bg-gold-600 text-black rounded-full font-semibold transition-colors disabled:opacity-40">
-                        Continuar →
+                        className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-black text-xs uppercase font-extrabold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+                        Continuar
                       </button>
                     </div>
                   </div>
@@ -3690,11 +4077,11 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
 
   const getActivityColor = (level) => {
     switch (level) {
-      case 1: return 'bg-blue-500/30';
-      case 2: return 'bg-blue-500/60';
-      case 3: return 'bg-blue-500/90';
-      case 4: return 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]';
-      default: return 'bg-neutral-800';
+      case 1: return 'bg-orange-500/15 border border-orange-500/10';
+      case 2: return 'bg-orange-500/35 border border-orange-500/20';
+      case 3: return 'bg-orange-500/65 border border-orange-500/40';
+      case 4: return 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)] border border-orange-600';
+      default: return 'bg-neutral-900 border border-neutral-800';
     }
   };
 
@@ -3703,137 +4090,158 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="min-h-screen w-full pt-20 pb-8"
+      className="min-h-screen w-full pt-20 pb-8 px-4 sm:px-6 relative text-white"
+      style={{ background: '#080808', fontFamily: "'Rajdhani', sans-serif" }}
     >
-      <div className="max-w-4xl mx-auto">
-        {/* PROFILE CARD - Centered & Large Avatar */}
-        <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 rounded-2xl p-8 mb-4 mx-4 relative overflow-hidden text-center">
-          <div className="absolute top-0 right-0 p-4 opacity-5 font-black text-9xl select-none pointer-events-none">
-            {currentRank.kanji}
-          </div>
+      {/* Scanline overlay */}
+      <div className="hud-scanline" />
 
-          <div className="relative z-10 flex flex-col items-center">
-            {/* Rank Info (Top) */}
-            <div className="mb-6">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <span className={`text-4xl ${currentRank.color}`}>{currentRank.symbol}</span>
-                <h2 className={`text-3xl font-bold ${currentRank.color}`}>{currentRank.name}</h2>
+      {/* Ambient glow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(249,115,22,0.03) 0%, transparent 70%)'
+      }} />
+
+      <div className="max-w-xl mx-auto flex flex-col gap-5 z-10 relative">
+        
+        {/* PROFILE CARD - Styled as HudPanel */}
+        <HudPanel title="ESTADO_DEL_PILOTO" mod="PLT-X01" id="0001-P" dotStatus="active" className="w-full">
+          <div className="relative z-10 flex flex-col items-center py-2">
+            
+            {/* Rank Info */}
+            <div className="mb-4 text-center">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <span className={`text-3xl ${currentRank.color}`}>{currentRank.symbol}</span>
+                <h2 className={`text-2xl font-bold tracking-wider ${currentRank.color} uppercase`}>{currentRank.name}</h2>
               </div>
-              <p className="text-base text-gray-400 mb-2">{currentRank.title}</p>
+              <p className="text-xs text-gray-400 font-mono tracking-wider mb-2">// {currentRank.title.toUpperCase()}</p>
 
-              <div className="flex justify-center items-center gap-4 text-xs font-mono text-gray-500 mb-2">
-                <span className="px-2 py-1 bg-neutral-800 rounded">Lvl {currentLevel}</span>
+              <div className="inline-flex items-center gap-3 text-[10px] font-mono text-orange-400 border border-orange-500/25 px-3 py-1 bg-black"
+                style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}>
+                <span>LVL {currentLevel}</span>
                 <span>•</span>
                 <span>{Math.floor(xp)} / {nextLevelXP} XP</span>
               </div>
             </div>
 
-            {/* Avatar GIF (Large & Centered) */}
-            <div className="w-64 h-64 rounded-full ring-4 ring-neutral-800 overflow-hidden shadow-2xl mb-6 bg-neutral-900">
-              <img src={currentRank.img} alt="Avatar" className="w-full h-full object-cover" />
+            {/* Avatar GIF with styled ring */}
+            <div className="w-48 h-48 border border-orange-500/35 overflow-hidden mb-4 bg-neutral-950 p-1.5"
+              style={{ clipPath: 'polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px)' }}>
+              <div className="w-full h-full overflow-hidden"
+                style={{ clipPath: 'polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px)' }}>
+                <img src={currentRank.img} alt="Avatar" className="w-full h-full object-cover opacity-85" />
+              </div>
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full max-w-md bg-neutral-800 rounded-full h-2 overflow-hidden mb-1">
+            <div className="w-full max-w-xs bg-neutral-950 border border-orange-500/10 h-2.5 overflow-hidden mb-1"
+              style={{ clipPath: 'polygon(2px 0%, 100% 0%, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0% 100%, 0% 2px)' }}>
               <motion.div
-                className="h-full bg-gradient-to-r from-gold-600 to-gold-400"
+                className="h-full bg-gradient-to-r from-orange-500 to-red-500"
                 initial={{ width: 0 }}
                 animate={{ width: `${progressToNext}%` }}
               />
             </div>
-            <p className="text-xs text-gray-500 mb-6">
-              {Math.round(nextLevelXP - xp)} XP para el nivel {currentLevel + 1}
+            <p className="text-[9px] font-mono text-gray-500 mb-4">
+              // FALTA {Math.round(nextLevelXP - xp)} XP PARA EL RANGO SIGUIENTE
             </p>
 
             {/* Next Rank Info */}
             {nextRank && (
-              <div className="w-full max-w-sm bg-neutral-950/50 border border-neutral-800 rounded-xl p-4 text-left backdrop-blur-sm">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 border-b border-neutral-800 pb-2">
-                  Siguiente Rango
+              <div className="w-full max-w-sm border border-orange-500/15 bg-black/40 p-3 flex flex-col justify-between"
+                style={{ clipPath: 'polygon(8px 0%, 100% 0%, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0% 100%, 0% 8px)' }}>
+                <p className="text-[8px] font-mono text-gray-500 uppercase tracking-widest mb-2 border-b border-orange-500/5 pb-1">
+                  // MEJORA_PROMETIDA
                 </p>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3">
                   <span className={`text-2xl ${nextRank.color}`}>{nextRank.symbol}</span>
                   <div>
-                    <h4 className={`text-base font-bold ${nextRank.color} leading-none`}>{nextRank.name}</h4>
-                    <p className="text-xs text-gray-400">"{nextRank.title}"</p>
+                    <h4 className={`text-sm font-bold ${nextRank.color} leading-none uppercase`}>{nextRank.name}</h4>
+                    <p className="text-[10px] text-gray-400 mt-1 font-mono">"{nextRank.title.toUpperCase()}"</p>
                   </div>
                 </div>
-                <div className="space-y-1.5 mt-3 text-xs">
-                  <p className="text-gray-300">
-                    <span className="text-gold-500 font-medium mr-1 flex items-center gap-1 inline-flex">
-                      <Sparkles size={12} /> Desbloquea:
-                    </span>
+                <div className="space-y-1.5 mt-2 text-[10px] font-mono text-gray-400">
+                  <p>
+                    <span className="text-orange-400 mr-1">DESBLOQUEA:</span>
                     {nextRank.unlocks}
                   </p>
-                  <p className="text-gray-400">
-                    <span className="text-gray-500 mr-1">Faltan:</span>
-                    <span className="font-mono bg-neutral-900 px-1.5 py-0.5 rounded text-white">{Math.ceil(xpNeededForNextRank)} XP</span>
+                  <p>
+                    <span className="text-gray-500 mr-1">REQUERIDO:</span>
+                    <span className="text-white font-bold">{Math.ceil(xpNeededForNextRank)} XP</span>
                   </p>
                 </div>
               </div>
             )}
           </div>
-        </div>
+        </HudPanel>
 
-        {/* STREAK */}
-        <div className="bg-neutral-900 rounded-2xl p-5 mb-4 mx-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Racha</p>
-          <div className="grid grid-cols-2 gap-4">
+        {/* STREAK - Styled as HudPanel */}
+        <HudPanel title="MÉTRICAS_DE_RACHA" mod="STK-R2" id="0002-S" dotStatus="active" className="w-full">
+          <div className="grid grid-cols-2 gap-4 py-1">
             {[
-              { icon: '🔥', label: 'Racha actual', value: currentStreak },
-              { icon: '🏆', label: 'Mejor racha', value: bestStreak }
-            ].map(({ icon, label, value }) => (
-              <div key={label} className="flex items-center gap-3">
+              { icon: '🔥', label: 'Racha actual', value: currentStreak, unit: 'días' },
+              { icon: '🏆', label: 'Mejor racha', value: bestStreak, unit: 'días' }
+            ].map(({ icon, label, value, unit }) => (
+              <div key={label} className="flex items-center gap-3 p-2.5 bg-neutral-950 border border-orange-500/5"
+                style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
                 <span className="text-2xl">{icon}</span>
                 <div>
-                  <p className="text-xs text-gray-400">{label}</p>
-                  <p className="text-2xl font-bold">{value} <span className="text-sm font-normal text-gray-400">días</span></p>
+                  <p className="text-[9px] font-mono text-gray-500 uppercase leading-none mb-1">{label}</p>
+                  <p className="text-lg font-bold font-mono text-orange-400 leading-none">
+                    {value} <span className="text-[10px] font-normal text-gray-500 uppercase">{unit}</span>
+                  </p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </HudPanel>
 
         {/* TABS */}
-        <div className="flex mx-4 mb-4 bg-neutral-900 rounded-xl p-1">
-          {[['daily', 'Diario'], ['weekly', 'Semanal'], ['monthly', 'Mensual']].map(([id, label]) => (
+        <div className="flex bg-neutral-950 border border-orange-500/10 p-1"
+          style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)' }}>
+          {[
+            ['daily', 'Diario'],
+            ['weekly', 'Semanal'],
+            ['monthly', 'Mensual']
+          ].map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === id ? 'bg-neutral-700 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className="flex-1 py-1.5 text-xs font-bold uppercase transition-all cursor-pointer"
+              style={{
+                background: activeTab === id ? 'rgba(249,115,22,0.1)' : 'transparent',
+                border: activeTab === id ? '1px solid #f97316' : '1px solid transparent',
+                color: activeTab === id ? '#f97316' : '#6b7280',
+                clipPath: 'polygon(5px 0%, 100% 0%, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0% 100%, 0% 5px)'
+              }}
             >
               {label}
             </button>
           ))}
         </div>
 
-        {/* KEY METRICS */}
-        <div className="bg-neutral-900 rounded-2xl p-5 mb-4 mx-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Métricas clave</p>
-          <div className="space-y-4">
+        {/* KEY METRICS - Styled as HudPanel */}
+        <HudPanel title="DIAGNÓSTICO_PRODUCTIVO" mod="DGN-P3" id="0003-D" dotStatus="active" className="w-full">
+          <div className="grid grid-cols-2 gap-3 py-1">
             {[
-              { icon: '📈', bg: 'bg-green-900/40', label: 'Día más productivo', value: mostProductiveDay },
-              { icon: '📉', bg: 'bg-red-900/40', label: 'Día menos productivo', value: leastProductiveDay },
-              { icon: '⏰', bg: 'bg-yellow-900/40', label: 'Hora más activa', value: mostActiveTime },
-              { icon: '📊', bg: 'bg-blue-900/40', label: 'Focus diario promedio', value: avgFocus },
-            ].map(({ icon, bg, label, value }) => (
-              <div key={label} className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center text-lg flex-shrink-0`}>{icon}</div>
-                <div>
-                  <p className="text-xs text-gray-400">{label}</p>
-                  <p className="font-semibold">{value}</p>
-                </div>
+              { label: 'Día más productivo', value: mostProductiveDay },
+              { label: 'Día menos productivo', value: leastProductiveDay },
+              { label: 'Hora más activa', value: mostActiveTime },
+              { label: 'Focus diario promedio', value: avgFocus },
+            ].map(({ label, value }) => (
+              <div key={label} className="p-3 bg-[#0d0d0d] border border-orange-500/10 flex flex-col justify-between"
+                style={{ clipPath: 'polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px)', height: '62px' }}>
+                <p className="text-[8px] font-mono text-gray-500 uppercase tracking-wider leading-none mb-1">// {label}</p>
+                <p className="text-xs font-bold text-orange-400 uppercase tracking-wide leading-none">{value}</p>
               </div>
             ))}
           </div>
-        </div>
+        </HudPanel>
 
-        {/* ACTIVITY CALENDAR */}
-        <div className="bg-neutral-900 rounded-2xl p-5 mb-4 mx-4 overflow-hidden">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Contribuciones</p>
-          <div className="flex justify-center w-full">
+        {/* ACTIVITY CALENDAR - Styled as HudPanel */}
+        <HudPanel title="MATRIZ_DE_CONTRIBUCIONES" mod="MTR-C5" id="0004-M" dotStatus="active" className="w-full">
+          <div className="flex justify-center w-full py-1">
             <div className="flex gap-2 max-w-full">
-              <div className="flex flex-col justify-between text-[10px] text-gray-500 py-1 pr-1 font-medium z-10 sticky left-0 bg-neutral-900">
+              <div className="flex flex-col justify-between text-[8px] text-gray-500 font-mono py-1 pr-1 z-10 sticky left-0 bg-transparent">
                 <span>L</span>
                 <span></span>
                 <span>M</span>
@@ -3842,15 +4250,15 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
                 <span></span>
                 <span>D</span>
               </div>
-              <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+              <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-none">
                 {activityMatrix.map((col, colIndex) => (
-                  <div key={colIndex} className="flex flex-col gap-1.5">
+                  <div key={colIndex} className="flex flex-col gap-1">
                     {col.map((day, rowIndex) => {
-                      if (!day) return <div key={rowIndex} className="w-3.5 h-3.5 rounded-[3px]" />;
+                      if (!day) return <div key={rowIndex} className="w-3 h-3 rounded-none" />;
                       return (
                         <div
                           key={rowIndex}
-                          className={`w-3.5 h-3.5 rounded-[3px] ${getActivityColor(day.level)} transition-colors duration-200`}
+                          className={`w-3 h-3 rounded-none ${getActivityColor(day.level)} transition-colors duration-200`}
                           title={`${day.count} deepworks el ${day.date}`}
                         />
                       )
@@ -3860,18 +4268,16 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
               </div>
             </div>
           </div>
-        </div>
+        </HudPanel>
 
-        {/* FOCUS TIMELINE */}
-        <div className="bg-neutral-900 rounded-2xl p-5 mb-4 mx-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Focus Timeline</p>
+        {/* FOCUS TIMELINE - Styled as HudPanel */}
+        <HudPanel title="CRONOLOGÍA_DE_ENFOQUE" mod="CRN-F6" id="0005-C" dotStatus="active" className="w-full">
           {history.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-8">Completa tu primer deepwork para ver datos</p>
+            <p className="text-gray-500 text-xs text-center font-mono py-8 uppercase tracking-widest">// SIN REGISTROS DE ACTIVIDAD</p>
           ) : (
             <>
               {(() => {
                 const svgW = 300, svgH = 80;
-                // Generate points starting slightly off the bottom for a cleaner look
                 const ptsRaw = chartData.map((d, i) => {
                   const x = chartData.length > 1 ? (i / (chartData.length - 1)) * svgW : svgW / 2;
                   const y = svgH - (d.value / maxValue) * (svgH - 10) - 2;
@@ -3879,42 +4285,41 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
                 });
                 const ptsString = ptsRaw.map(p => `${p.x},${p.y}`).join(' ');
 
-                // Close the polygon for the gradient area
                 const firstX = ptsRaw[0]?.x || 0;
                 const lastX = ptsRaw[ptsRaw.length - 1]?.x || svgW;
                 const fillArea = `${firstX},${svgH} ${ptsString} ${lastX},${svgH}`;
 
                 return (
-                  <div className="relative">
-                    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" preserveAspectRatio="none" style={{ height: 100 }}>
+                  <div className="relative py-1">
+                    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" preserveAspectRatio="none" style={{ height: 90 }}>
                       <defs>
                         <linearGradient id="focusGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
-                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                          <stop offset="0%" stopColor="#f97316" stopOpacity="0.4" />
+                          <stop offset="100%" stopColor="#f97316" stopOpacity="0.0" />
                         </linearGradient>
                       </defs>
                       {/* Horizontal Grid Lines */}
                       {[0.25, 0.5, 0.75].map(f => (
-                        <line key={f} x1="0" y1={svgH * f} x2={svgW} y2={svgH * f} stroke="#374151" strokeWidth="0.5" strokeDasharray="4 4" />
+                        <line key={f} x1="0" y1={svgH * f} x2={svgW} y2={svgH * f} stroke="rgba(249,115,22,0.15)" strokeWidth="0.5" strokeDasharray="3 3" />
                       ))}
                       {/* Filled Area */}
                       <polygon points={fillArea} fill="url(#focusGradient)" />
                       {/* Line */}
-                      <polyline points={ptsString} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points={ptsString} fill="none" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ filter: 'drop-shadow(0 0 4px rgba(249,115,22,0.6))' }} />
                     </svg>
 
                     {/* Labels aligned with their specific X positions */}
-                    <div className="relative w-full h-6 mt-2">
+                    <div className="relative w-full h-4 mt-1">
                       {ptsRaw.map((p, i) => {
                         const label = chartData[i].label;
                         if (!label) return null;
 
-                        // Calculate percentage position for absolute positioning
                         const pct = (p.x / svgW) * 100;
                         return (
                           <span
                             key={i}
-                            className="absolute text-[10px] text-gray-500 capitalize transform -translate-x-1/2 whitespace-nowrap"
+                            className="absolute text-[8px] font-mono text-gray-500 uppercase tracking-tighter transform -translate-x-1/2 whitespace-nowrap"
                             style={{ left: `${pct}%` }}
                           >
                             {label}
@@ -3927,28 +4332,31 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
               })()}
             </>
           )}
-        </div>
+        </HudPanel>
 
-        {/* PROJECT STATS */}
-        <div className="bg-neutral-900 rounded-2xl p-5 mx-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Proyectos</p>
-          <div className="space-y-4">
+        {/* PROJECT STATS - Styled as HudPanel */}
+        <HudPanel title="RENDIMIENTO_POR_PROYECTO" mod="PRJ-R7" id="0006-P" dotStatus="active" className="w-full">
+          <div className="space-y-3.5 py-1">
             {[...projects].sort((a, b) => b.totalDeepworks - a.totalDeepworks).map(project => {
               const maxP = Math.max(...projects.map(p => p.totalDeepworks), 1)
               return (
                 <div key={project.id} className="flex items-center gap-3">
-                  <span className="text-2xl">{project.emoji}</span>
+                  <span className="text-xl p-1 bg-neutral-950 border border-orange-500/10"
+                    style={{ clipPath: 'polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px)' }}>
+                    {project.emoji}
+                  </span>
                   <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <p className="text-sm font-medium">{project.name}</p>
-                      <p className="text-sm font-bold text-gold-500">{project.totalDeepworks}</p>
+                    <div className="flex justify-between mb-1 font-mono text-[10px] uppercase">
+                      <p className="font-bold text-gray-300 tracking-wide truncate max-w-[150px]">{project.name}</p>
+                      <p className="font-bold text-orange-400">{project.totalDeepworks} dw</p>
                     </div>
-                    <div className="w-full bg-neutral-800 rounded-full h-1.5">
+                    <div className="w-full bg-neutral-950 border border-orange-500/10 h-2"
+                      style={{ clipPath: 'polygon(2px 0%, 100% 0%, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0% 100%, 0% 2px)' }}>
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(project.totalDeepworks / maxP) * 100}%` }}
                         transition={{ duration: 0.6 }}
-                        className="bg-gold-500 h-1.5 rounded-full"
+                        className="bg-gradient-to-r from-orange-500 to-red-500 h-full"
                       />
                     </div>
                   </div>
@@ -3956,7 +4364,7 @@ function MetricsScreen({ history, projects, currentRank, currentLevel, xp, nextL
               )
             })}
           </div>
-        </div>
+        </HudPanel>
       </div>
     </motion.div>
   )
