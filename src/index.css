@@ -19,6 +19,90 @@
   --animate-blink: blink 1.2s step-end infinite;
 }
 
+/* ============= TEMA DEL MUNDO =============
+   Valores por defecto (mundo Brasa). App.jsx los reemplaza según el mundo
+   y el nivel del proyecto activo (ver src/lib/worlds.js). */
+:root {
+  --accent: #f97316;
+  --accent-rgb: 249,115,22;
+  --accent-2: #ef4444;
+  --accent-2-rgb: 239,68,68;
+  --accent-strong: color-mix(in oklab, var(--accent) 80%, black);
+  --bg: #080808;
+  --glow: 0.45;
+
+  /* Las clases orange-* de Tailwind siguen al acento del mundo */
+  --color-orange-50: color-mix(in oklab, var(--accent) 8%, white);
+  --color-orange-100: color-mix(in oklab, var(--accent) 18%, white);
+  --color-orange-200: color-mix(in oklab, var(--accent) 35%, white);
+  --color-orange-300: color-mix(in oklab, var(--accent) 60%, white);
+  --color-orange-400: color-mix(in oklab, var(--accent) 82%, white);
+  --color-orange-500: var(--accent);
+  --color-orange-600: color-mix(in oklab, var(--accent) 82%, black);
+  --color-orange-700: color-mix(in oklab, var(--accent) 65%, black);
+  --color-orange-800: color-mix(in oklab, var(--accent) 50%, black);
+  --color-orange-900: color-mix(in oklab, var(--accent) 35%, black);
+  --color-orange-950: color-mix(in oklab, var(--accent) 20%, black);
+  --color-neutral-950: var(--bg);
+}
+
+/* Atmósfera del mundo: capa decorativa sobre todo, sin interceptar clics */
+.world-atmosphere {
+  position: fixed; inset: 0; pointer-events: none; z-index: 35;
+  mix-blend-mode: screen; opacity: var(--glow);
+  transition: opacity 1s ease;
+}
+.world-atmosphere::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 35% at 0% 0%, rgba(var(--accent-rgb), 0.10), transparent 70%),
+    radial-gradient(ellipse 50% 30% at 100% 100%, rgba(var(--accent-2-rgb), 0.10), transparent 70%);
+}
+.world-atmosphere[data-texture='embers']::after {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 88%, rgba(var(--accent-rgb), 0.7), transparent),
+    radial-gradient(1px 1px at 33% 72%, rgba(var(--accent-rgb), 0.6), transparent),
+    radial-gradient(2px 2px at 58% 94%, rgba(var(--accent-2-rgb), 0.6), transparent),
+    radial-gradient(1px 1px at 76% 80%, rgba(var(--accent-rgb), 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 91% 66%, rgba(var(--accent-rgb), 0.5), transparent);
+  animation: embersRise 14s linear infinite;
+}
+.world-atmosphere[data-texture='ink']::after {
+  content: ''; position: absolute; inset: 0; opacity: 0.35;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 30% 20% at 85% 12%, rgba(var(--accent-2-rgb), 0.18), transparent 70%);
+}
+.world-atmosphere[data-texture='rays']::after {
+  content: ''; position: absolute; inset: -20%;
+  background: conic-gradient(from 200deg at 50% -10%, transparent 0deg, rgba(var(--accent-rgb), 0.08) 12deg, transparent 24deg,
+    rgba(var(--accent-rgb), 0.06) 40deg, transparent 52deg, rgba(var(--accent-rgb), 0.07) 70deg, transparent 84deg);
+}
+.world-atmosphere[data-texture='stars']::after {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 30% 65%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 55% 30%, rgba(var(--accent-rgb), 0.8), transparent),
+    radial-gradient(1px 1px at 72% 80%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 88% 15%, rgba(var(--accent-rgb), 0.6), transparent),
+    radial-gradient(1px 1px at 45% 90%, rgba(255,255,255,0.3), transparent);
+  background-size: 320px 320px;
+  animation: twinkle 6s ease-in-out infinite;
+}
+.world-atmosphere[data-texture='roots']::after {
+  content: ''; position: absolute; inset: 0; opacity: 0.6;
+  background:
+    radial-gradient(circle at 20% 110%, transparent 30%, rgba(var(--accent-rgb), 0.08) 31%, transparent 33%),
+    radial-gradient(circle at 80% 115%, transparent 40%, rgba(var(--accent-2-rgb), 0.08) 41%, transparent 43%),
+    radial-gradient(circle at 50% 120%, transparent 50%, rgba(var(--accent-rgb), 0.06) 51%, transparent 53%);
+}
+@keyframes embersRise { 0% { transform: translateY(0); opacity: 0.9; } 100% { transform: translateY(-40vh); opacity: 0; } }
+@keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) {
+  .world-atmosphere::after { animation: none !important; }
+}
+
 @keyframes breathe {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
@@ -32,8 +116,8 @@
   50% { opacity: 0; }
 }
 @keyframes pulseOrange {
-  0%, 100% { box-shadow: 0 0 10px rgba(249,115,22,0.3), 0 0 20px rgba(249,115,22,0.1); }
-  50% { box-shadow: 0 0 20px rgba(249,115,22,0.6), 0 0 40px rgba(249,115,22,0.2); }
+  0%, 100% { box-shadow: 0 0 10px rgba(var(--accent-rgb),0.3), 0 0 20px rgba(var(--accent-rgb),0.1); }
+  50% { box-shadow: 0 0 20px rgba(var(--accent-rgb),0.6), 0 0 40px rgba(var(--accent-rgb),0.2); }
 }
 @keyframes confetti {
   0% { transform: translateY(0) rotate(0deg); opacity: 1; }
@@ -43,7 +127,7 @@
 * { box-sizing: border-box; }
 
 body {
-  background-color: #080808;
+  background-color: var(--bg);
   color: #e5e7eb;
   font-family: 'Rajdhani', system-ui, sans-serif;
   margin: 0; padding: 0;
@@ -56,7 +140,7 @@ body {
 /* HUD Panel */
 .hud-panel {
   background: #0d0d0d;
-  border: 1px solid rgba(249,115,22,0.18);
+  border: 1px solid rgba(var(--accent-rgb),0.18);
   position: relative;
 }
 .hud-panel::before,
@@ -64,7 +148,7 @@ body {
   content: '';
   position: absolute;
   width: 10px; height: 10px;
-  border-color: #f97316;
+  border-color: var(--accent);
   border-style: solid;
   z-index: 2;
 }
@@ -72,42 +156,42 @@ body {
 .hud-panel::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
 
 .hud-stripe {
-  background: repeating-linear-gradient(-45deg, rgba(249,115,22,0.22) 0px, rgba(249,115,22,0.22) 4px, transparent 4px, transparent 10px);
+  background: repeating-linear-gradient(-45deg, rgba(var(--accent-rgb),0.22) 0px, rgba(var(--accent-rgb),0.22) 4px, transparent 4px, transparent 10px);
   height: 4px; width: 100%;
 }
 
 .hud-glow-orange {
-  box-shadow: 0 0 12px rgba(249,115,22,0.4), 0 0 30px rgba(249,115,22,0.15);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb),0.4), 0 0 30px rgba(var(--accent-rgb),0.15);
 }
 
 .hud-seg-bar { display: flex; gap: 3px; }
 .hud-seg {
   height: 8px; flex: 1;
-  background: rgba(249,115,22,0.1);
-  border: 1px solid rgba(249,115,22,0.2);
+  background: rgba(var(--accent-rgb),0.1);
+  border: 1px solid rgba(var(--accent-rgb),0.2);
   transition: background 0.3s, box-shadow 0.3s;
 }
-.hud-seg.on { background: #f97316; box-shadow: 0 0 8px rgba(249,115,22,0.7); }
+.hud-seg.on { background: var(--accent); box-shadow: 0 0 8px rgba(var(--accent-rgb),0.7); }
 
 .hud-scanline { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 30; }
 .hud-scanline::after {
   content: '';
   position: absolute;
   left: 0; right: 0; height: 2px;
-  background: linear-gradient(transparent, rgba(249,115,22,0.05), transparent);
+  background: linear-gradient(transparent, rgba(var(--accent-rgb),0.05), transparent);
   animation: scanline 7s linear infinite;
 }
 
 .hud-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .hud-dot.active  { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-.hud-dot.standby { background: #f97316; box-shadow: 0 0 8px #f97316; }
+.hud-dot.standby { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .hud-dot.idle    { background: #374151; }
 
 .hud-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #4b5563; }
 .hud-value { font-family: 'Orbitron', sans-serif; font-weight: 700; }
 .hud-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.hud-id { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: rgba(249,115,22,0.3); letter-spacing: 0.08em; }
-.hud-number { font-family: 'Orbitron', sans-serif; color: #f97316; text-shadow: 0 0 20px rgba(249,115,22,0.6), 0 0 40px rgba(249,115,22,0.2); }
+.hud-id { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: rgba(var(--accent-rgb),0.3); letter-spacing: 0.08em; }
+.hud-number { font-family: 'Orbitron', sans-serif; color: var(--accent); text-shadow: 0 0 20px rgba(var(--accent-rgb),0.6), 0 0 40px rgba(var(--accent-rgb),0.2); }
 
 .hud-project-name {
   writing-mode: vertical-rl;
@@ -117,14 +201,14 @@ body {
   font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  background: linear-gradient(to top, #f97316, #ef4444);
+  background: linear-gradient(to top, var(--accent), var(--accent-2));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0 8px rgba(249,115,22,0.5));
+  filter: drop-shadow(0 0 8px rgba(var(--accent-rgb),0.5));
 }
 
-.hud-cursor::after { content: 'X'; animation: blink 1.2s step-end infinite; color: #f97316; margin-left: 2px; }
+.hud-cursor::after { content: 'X'; animation: blink 1.2s step-end infinite; color: var(--accent); margin-left: 2px; }
 
 .text-gradient {
   background: linear-gradient(to right, var(--color-gold-400), var(--color-gold-600));
